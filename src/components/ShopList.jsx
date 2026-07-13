@@ -43,6 +43,15 @@ function ShopList() {
   const PAGE_SIZE = 20
   const loadingRef = useRef(false)
 
+  function shuffleArray(array) {
+    const arr = [...array]
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]]
+    }
+    return arr
+  }
+
   useEffect(() => {
     fetchShops(1)
   }, [])
@@ -80,10 +89,11 @@ function ShopList() {
         throw new Error(`HTTP ${response.status}`)
       }
       const data = await response.json()
+      const shuffledItems = shuffleArray(data.items)
       if (page === 1) {
-        setShops(data.items)
+        setShops(shuffledItems)
       } else {
-        setShops(prev => [...prev, ...data.items])
+        setShops(prev => [...prev, ...shuffledItems])
       }
       setHasMore(data.page < data.totalPages)
       setCurrentPage(page)
