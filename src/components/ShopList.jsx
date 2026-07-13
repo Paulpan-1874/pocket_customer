@@ -570,7 +570,7 @@ function ShopList() {
                 <button
                   onClick={() => handleCheck(shop.id, 'pass')}
                   disabled={checking[shop.id]}
-                  className="flex-1 py-2 px-3 border border-gray-300 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-1"
+                  className="flex-1 py-2 px-3 border border-gray-300 bg-gray-50 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-1"
                 >
                   ×
                   Pass
@@ -578,7 +578,7 @@ function ShopList() {
                 <button
                   onClick={() => handleCheck(shop.id, 'good')}
                   disabled={checking[shop.id]}
-                  className="flex-1 py-2 px-3 border border-green-500 text-green-600 rounded-lg text-sm font-medium hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-1"
+                  className="flex-1 py-2 px-3 border border-green-200 bg-green-50 text-green-600 rounded-lg text-sm font-medium hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-1"
                 >
                   ✓
                   Good
