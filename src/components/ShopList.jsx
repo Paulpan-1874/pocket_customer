@@ -4,37 +4,130 @@ function ShopList() {
   const [shops, setShops] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [showImport, setShowImport] = useState(false)
+  const [importText, setImportText] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState(null)
 
   useEffect(() => {
-    async function fetchShops() {
-      try {
-        setLoading(true)
-        setError(null)
-        const response = await fetch('/api/collections/customers/records?page=1&perPage=50')
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`)
-        }
-        const data = await response.json()
-        setShops(data.items)
-      } catch (err) {
-        setError(err.message)
-      } finally {
-        setLoading(false)
+    fetchShops()
+  }, [])
+
+  async function fetchShops() {
+    try {
+      setLoading(true)
+      setError(null)
+      const response = await fetch('/api/collections/customers/records?page=1&perPage=50')
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+      const data = await response.json()
+      setShops(data.items)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleImport() {
+    if (!importText.trim()) {
+      setImportResult({ success: false, message: '请输入导入数据' })
+      return
+    }
+
+    const lines = importText.trim().split('\n').filter(line => line.trim())
+    const records = []
+
+    for (const line of lines) {
+      const parts = line.split(',')
+      if (parts.length >= 3) {
+        records.push({
+          store_name: parts[0].trim(),
+          store_phone: parts[1].trim(),
+          store_address: parts.slice(2).join(',').trim()
+        })
       }
     }
 
-    fetchShops()
-  }, [])
+    if (records.length === 0) {
+      setImportResult({ success: false, message: '未解析到有效数据，请检查格式' })
+      return
+    }
+
+    try {
+      setImporting(true)
+      setImportResult(null)
+
+      for (const record of records) {
+        await fetch('/api/collections/customers/records', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(record)
+        })
+      }
+
+      setImportResult({ success: true, message: `成功导入 ${records.length} 条数据` })
+      setImportText('')
+      await fetchShops()
+    } catch (err) {
+      setImportResult({ success: false, message: `导入失败：${err.message}` })
+    } finally {
+      setImporting(false)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm sticky top-0 z-10">
         <div className="max-w-lg mx-auto px-4 py-4">
-          <h1 className="text-xl font-semibold text-gray-800">店铺列表</h1>
+          <div className="flex items-center justify-between">
+            <h1 className="text-xl font-semibold text-gray-800">店铺列表</h1>
+            <button
+              onClick={() => setShowImport(!showImport)}
+              className="flex items-center gap-1 text-blue-600 text-sm font-medium"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              批量导入
+            </button>
+          </div>
         </div>
       </header>
       
       <main className="max-w-lg mx-auto px-4 py-4 space-y-4">
+        {showImport && (
+          <div className="bg-white rounded-xl shadow-sm p-4">
+            <h3 className="font-medium text-gray-800 mb-3">批量导入店铺</h3>
+            <textarea
+              value={importText}
+              onChange={(e) => setImportText(e.target.value)}
+              placeholder="港式手撕鸡,15016380172,端州一路38号君安峰景湾花苑A1A2A3幢首层第7卡"
+              className="w-full h-40 px-3 py-2 border border-gray-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            <p className="text-xs text-gray-400 mt-2 mb-3">
+              每行一条数据，格式：店铺名称,电话号码,地址
+            </p>
+            {importResult && (
+              <div className={`mb-3 p-2 rounded-lg text-sm ${
+                importResult.success ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'
+              }`}>
+                {importResult.message}
+              </div>
+            )}
+            <button
+              onClick={handleImport}
+              disabled={importing}
+              className="w-full py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {importing ? '导入中...' : '确认导入'}
+            </button>
+          </div>
+        )}
+        
         {loading && (
           <div className="flex items-center justify-center py-12">
             <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
