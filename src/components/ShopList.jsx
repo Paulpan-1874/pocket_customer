@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { Phone, Copy, Check, MapPin } from 'lucide-react'
 
 function formatRelativeTime(dateStr) {
   const date = new Date(dateStr)
@@ -589,33 +590,28 @@ function ShopList() {
               key={shop.id}
               className={`bg-white rounded-xl shadow-sm p-4 transition-all duration-150 hover:shadow-md ${sortedRecords.length === 0 ? 'ring-4 ring-green-500' : ''}`}
             >
-              <div className="flex items-center gap-2 mb-3">
-                <h2 className="text-lg font-semibold text-gray-900 flex-1 truncate">{shop.store_name}</h2>
+              <div className="mb-3">
+                <h2 className="text-lg font-semibold text-gray-900 truncate mb-2">{shop.store_name}</h2>
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0">
-                    <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                    </svg>
+                  <div className="w-7 h-7 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0">
+                    <Phone className="w-3.5 h-3.5 text-blue-600" strokeWidth={2} />
                   </div>
                   <span className="text-sm text-gray-600 flex-shrink-0 font-mono">{shop.store_phone}</span>
                   <button
                     onClick={() => handleCopyPhone(shop.id, shop.store_phone)}
-                    className="w-8 h-8 flex items-center justify-center text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-full transition-colors"
+                    className="-mr-1 p-1 flex items-center justify-center text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-full transition-colors"
                     title={copiedId === shop.id ? '已复制' : '复制号码'}
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={copiedId === shop.id ? 'M5 13l4 4L19 7' : 'M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z'} />
-                    </svg>
+                    {copiedId === shop.id
+                      ? <Check className="w-3.5 h-3.5" strokeWidth={2} />
+                      : <Copy className="w-3.5 h-3.5" strokeWidth={2} />}
                   </button>
                 </div>
               </div>
               
-              <div className="flex items-start gap-2 text-gray-600 mb-4">
-                <div className="w-6 h-6 rounded-full bg-green-50 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <svg className="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
+              <div className="flex items-center gap-2 text-gray-600 mb-4">
+                <div className="w-7 h-7 rounded-full bg-green-50 flex items-center justify-center flex-shrink-0">
+                  <MapPin className="w-3.5 h-3.5 text-green-600" strokeWidth={2} />
                 </div>
                 <span className="text-sm leading-relaxed flex-1">{shop.store_address}</span>
               </div>
@@ -628,20 +624,28 @@ function ShopList() {
                 </div>
               )}
               
-              <div className="flex items-center gap-3">
+              <div className="flex gap-3">
+                <div className="flex flex-col gap-2 flex-1">
+                  <button
+                    onClick={() => handleCheck(shop.id, 'pass')}
+                    disabled={checking[shop.id]}
+                    className="flex-1 py-2 px-3 border border-gray-300 bg-gray-50 text-gray-600 rounded-lg text-sm font-semibold hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+                  >
+                    Pass
+                  </button>
+                  <button
+                    onClick={() => handleCheck(shop.id, 'good')}
+                    disabled={checking[shop.id]}
+                    className="flex-1 py-2 px-3 border border-green-200 bg-green-50 text-green-600 rounded-lg text-sm font-semibold hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+                  >
+                    Good
+                  </button>
+                </div>
                 <button
-                  onClick={() => handleCheck(shop.id, 'pass')}
-                  disabled={checking[shop.id]}
-                  className="flex-1 py-2 px-3 border border-gray-300 bg-gray-50 text-gray-600 rounded-lg text-sm font-semibold hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+                  onClick={() => handleCopyPhone(shop.id, shop.store_phone)}
+                  className="flex-1 py-2 px-3 border border-blue-200 bg-blue-50 text-blue-600 rounded-lg text-sm font-semibold hover:bg-blue-100 transition-colors flex items-center justify-center"
                 >
-                  Pass
-                </button>
-                <button
-                  onClick={() => handleCheck(shop.id, 'good')}
-                  disabled={checking[shop.id]}
-                  className="flex-1 py-2 px-3 border border-green-200 bg-green-50 text-green-600 rounded-lg text-sm font-semibold hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
-                >
-                  Good
+                  {copiedId === shop.id ? '已复制' : 'Copy'}
                 </button>
               </div>
               
