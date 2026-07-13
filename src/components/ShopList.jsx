@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import pb from '../services/pocketbase'
 
 function ShopList() {
   const [shops, setShops] = useState([])
@@ -11,8 +10,12 @@ function ShopList() {
       try {
         setLoading(true)
         setError(null)
-        const records = await pb.collection('customers').getList(1, 50)
-        setShops(records.items)
+        const response = await fetch('/api/collections/customers/records?page=1&perPage=50')
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`)
+        }
+        const data = await response.json()
+        setShops(data.items)
       } catch (err) {
         setError(err.message)
       } finally {
