@@ -174,7 +174,7 @@ function ShopList() {
         body: JSON.stringify({
           customer_id: customerId,
           select: checkType,
-          relation: currentUser?.name || currentUser?.username || currentUser?.email || '未知用户'
+          relation: currentUser?.id || currentUser?.name || currentUser?.username || currentUser?.email || '未知用户'
         })
       })
 
