@@ -28,9 +28,6 @@ function ShopList() {
   const [shops, setShops] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [currentPage, setCurrentPage] = useState(1)
-  const [hasMore, setHasMore] = useState(true)
-  const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [importText, setImportText] = useState('')
   const [importing, setImporting] = useState(false)
@@ -50,36 +47,91 @@ function ShopList() {
   const [relatedShops, setRelatedShops] = useState({})
   const [loadingRelated, setLoadingRelated] = useState({})
 
-  const PAGE_SIZE = 20
   const loadingRef = useRef(false)
 
-  function shuffleArray(array) {
-    const arr = [...array]
-    for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [arr[i], arr[j]] = [arr[j], arr[i]]
-    }
-    return arr
-  }
-
   useEffect(() => {
-    fetchShops(1)
+    fetchShops()
     fetchBigCustomerPhones()
   }, [])
 
   useEffect(() => {
-    const handleScroll = () => {
-      if (loadingRef.current || !hasMore) return
-      const scrollTop = document.documentElement.scrollTop || document.body.scrollTop
-      const scrollHeight = document.documentElement.scrollHeight || document.body.scrollHeight
-      const clientHeight = document.documentElement.clientHeight || window.innerHeight
-      if (scrollTop + clientHeight >= scrollHeight - 100) {
-        fetchShops(currentPage + 1)
-      }
+    if (authToken) {
+      fetchUserInfo()
     }
-    window.addEventListener('scroll', handleScroll)
-    return () => window.removeEventListener('scroll', handleScroll)
-  }, [hasMore, currentPage])
+  }, [authToken])
+
+  async function fetchShops() {
+    if (loadingRef.current) return
+    loadingRef.current = true
+
+    try {
+      setLoading(true)
+      setError(null)
+
+      const headers = {}
+      if (authToken) {
+        headers['Authorization'] = `Bearer ${authToken}`
+      }
+
+      // 直接用 sort=@random 取100条
+      const response = await fetch(
+        `/api/collections/customers/records?perPage=100&sort=@random`,
+        { headers }
+      )
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+
+      const data = await response.json()
+      
+      // 后端已经随机了，直接用
+      setShops(data.items)
+      
+      await fetchCheckRecords()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      loadingRef.current = false
+      setLoading(false)
+    }
+  }
+
+  async function fetchCheckRecords() {
+    try {
+      const headers = {}
+      if (authToken) {
+        headers['Authorization'] = `Bearer ${authToken}`
+      }
+      const response = await fetch('/api/collections/check_records/records?page=1&perPage=200&expand=relation', { headers })
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+      const data = await response.json()
+      const recordsByPhone = {}
+      data.items.forEach(record => {
+        const relationData = record.expand?.relation
+        const operatorName = relationData?.name || relationData?.username || relationData?.email || record.relation
+        const mappedRecord = {
+          id: record.id,
+          customer_id: record.customer_id,
+          store_name: record.store_name || '',
+          check_type: record.select,
+          operator: operatorName,
+          check_time: record.created
+        }
+        const p = normalizePhone(record.store_phone)
+        const key = p ? p : ('cid:' + record.customer_id)
+        if (!recordsByPhone[key]) {
+          recordsByPhone[key] = []
+        }
+        recordsByPhone[key].push(mappedRecord)
+      })
+      setCheckRecords(recordsByPhone)
+    } catch (err) {
+      console.log('获取检查记录失败:', err)
+    }
+  }
 
   async function fetchBigCustomerPhones() {
     try {
@@ -140,89 +192,6 @@ function ShopList() {
       return next
     })
   }
-
-  async function fetchShops(page = 1) {
-    if (loadingRef.current) return
-    loadingRef.current = true
-    try {
-      if (page === 1) {
-        setLoading(true)
-      } else {
-        setIsLoadingMore(true)
-      }
-      setError(null)
-      const headers = {}
-      if (authToken) {
-        headers['Authorization'] = `Bearer ${authToken}`
-      }
-      const response = await fetch(`/api/collections/customers/records?page=${page}&perPage=${PAGE_SIZE}`, { headers })
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
-      const data = await response.json()
-      const shuffledItems = shuffleArray(data.items)
-      if (page === 1) {
-        setShops(shuffledItems)
-      } else {
-        setShops(prev => [...prev, ...shuffledItems])
-      }
-      setHasMore(data.page < data.totalPages)
-      setCurrentPage(page)
-      await fetchCheckRecords()
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      loadingRef.current = false
-      setLoading(false)
-      setIsLoadingMore(false)
-    }
-  }
-
-  async function fetchCheckRecords() {
-    try {
-      const headers = {}
-      if (authToken) {
-        headers['Authorization'] = `Bearer ${authToken}`
-      }
-      const response = await fetch('/api/collections/check_records/records?page=1&perPage=200&expand=relation', { headers })
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
-      const data = await response.json()
-      const recordsByPhone = {}
-      data.items.forEach(record => {
-        const relationData = record.expand?.relation
-        const operatorName = relationData?.name || relationData?.username || relationData?.email || record.relation
-        const mappedRecord = {
-          id: record.id,
-          customer_id: record.customer_id,
-          store_name: record.store_name || '',
-          check_type: record.select,
-          operator: operatorName,
-          check_time: record.created
-        }
-        const p = normalizePhone(record.store_phone)
-        const key = p ? p : ('cid:' + record.customer_id)
-        if (!recordsByPhone[key]) {
-          recordsByPhone[key] = []
-        }
-        recordsByPhone[key].push(mappedRecord)
-      })
-      setCheckRecords(recordsByPhone)
-    } catch (err) {
-      console.log('获取检查记录失败:', err)
-    }
-  }
-
-  useEffect(() => {
-    fetchCheckRecords()
-  }, [])
-
-  useEffect(() => {
-    if (authToken) {
-      fetchUserInfo()
-    }
-  }, [authToken])
 
   async function fetchUserInfo() {
     try {
@@ -499,9 +468,7 @@ function ShopList() {
           message: `部分导入成功：成功 ${successCount} 条，失败 ${failCount} 条\n${errorDetails}${errors.length > 3 ? `\n...还有${errors.length - 3}条错误` : ''}`
         })
       }
-      setCurrentPage(1)
-      setHasMore(true)
-      await fetchShops(1)
+      await fetchShops()
     } catch (err) {
       setImportResult({ success: false, message: `导入失败：${err.message}` })
     } finally {
@@ -566,8 +533,23 @@ function ShopList() {
           <header className="bg-white shadow-sm sticky top-0 z-10">
             <div className="max-w-lg mx-auto px-4 py-4">
               <div className="flex items-center justify-between mb-3">
-                <h1 className="text-xl font-semibold text-gray-800">店铺列表</h1>
+                <div>
+                  <h1 className="text-xl font-semibold text-gray-800">店铺列表</h1>
+                  <div className="text-xs text-gray-400 mt-0.5">
+                    共 {shops.length} 条
+                  </div>
+                </div>
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => fetchShops()}
+                    className="flex items-center gap-1 text-blue-600 text-sm font-medium hover:text-blue-700"
+                    title="换一批"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    换一批
+                  </button>
                   <button
                     onClick={() => setShowImport(!showImport)}
                     className="flex items-center gap-1 text-blue-600 text-sm font-medium"
@@ -600,253 +582,241 @@ function ShopList() {
           </header>
           
           <main className="max-w-lg mx-auto px-4 py-4 space-y-4">
-        {showImport && (
-          <div className="bg-white rounded-xl shadow-sm p-4">
-            <h3 className="font-medium text-gray-800 mb-3">批量导入店铺</h3>
-            <textarea
-              value={importText}
-              onChange={(e) => setImportText(e.target.value)}
-              placeholder="荣记本草堂餐饮店  13760020096  前进中路6号首层105.106商铺"
-              className="w-full h-40 px-3 py-2 border border-gray-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-            <p className="text-xs text-gray-400 mt-2 mb-3">
-              每行一条数据，支持两种格式：<br/>
-              逗号分隔：店铺名称,电话号码,地址<br/>
-              空格/制表符分隔：店铺名称  电话号码  地址
-            </p>
-            {importResult && (
-              <div className={`mb-3 p-3 rounded-lg text-sm whitespace-pre-wrap ${
-                importResult.success === true ? 'bg-green-50 text-green-600' :
-                importResult.success === false ? 'bg-red-50 text-red-600' :
-                'bg-yellow-50 text-yellow-700'
-              }`}>
-                {importResult.message}
-              </div>
-            )}
-            <button
-              onClick={handleImport}
-              disabled={importing}
-              className="w-full py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {importing ? '导入中...' : '确认导入'}
-            </button>
-          </div>
-        )}
-        
-        {loading && (
-          <div className="flex items-center justify-center py-12">
-            <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-          </div>
-        )}
-        
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-            <p className="text-red-600 text-sm">加载失败：{error}</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="mt-2 text-blue-600 text-sm font-medium"
-            >
-              重试
-            </button>
-          </div>
-        )}
-        
-        {!loading && !error && shops.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-gray-500">暂无店铺数据</p>
-          </div>
-        )}
-        
-        {!loading && !error && shops.map((shop) => {
-          const phoneKey = normalizePhone(shop.store_phone)
-          const cidKey = 'cid:' + shop.id
-          const mergedRecords = [
-            ...(phoneKey ? (checkRecords[phoneKey] || []) : []),
-            ...(checkRecords[cidKey] || [])
-          ]
-          const sortedRecords = [...mergedRecords].sort((a, b) => new Date(b.check_time) - new Date(a.check_time))
-          const isBig = phoneKey && !!bigCustomerPhones[phoneKey]
-          const bigCount = isBig ? bigCustomerPhones[phoneKey] : 0
-          const feedback = checkFeedback[shop.id]
-
-          return (
-            <div
-              key={shop.id}
-              className={`bg-white rounded-xl shadow-sm p-4 transition-all duration-150 hover:shadow-md ${sortedRecords.length === 0 ? 'ring-4 ring-green-500' : ''}`}
-            >
-              <div className="mb-3">
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <h2 className="text-lg font-semibold text-gray-900 truncate">{shop.store_name}</h2>
-                  {isBig && (
-                    <button
-                      onClick={() => toggleExpandShop(shop)}
-                      className={`flex-shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold whitespace-nowrap transition-all shadow-sm ring-1 ring-amber-500/30 ${
-                        expandedShops[shop.id]
-                          ? 'bg-amber-600 text-white hover:bg-amber-700'
-                          : 'bg-amber-500 text-white hover:bg-amber-600'
-                      }`}
-                      title={expandedShops[shop.id] ? '收起同号店铺' : '展开同号店铺'}
-                    >
-                      <Crown className="w-3 h-3" strokeWidth={2.5} />
-                      大客户 · {bigCount}店
-                      <svg className={`w-2.5 h-2.5 transition-transform ${expandedShops[shop.id] ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0">
-                    <Phone className="w-3.5 h-3.5 text-blue-600" strokeWidth={2} />
+            {showImport && (
+              <div className="bg-white rounded-xl shadow-sm p-4">
+                <h3 className="font-medium text-gray-800 mb-3">批量导入店铺</h3>
+                <textarea
+                  value={importText}
+                  onChange={(e) => setImportText(e.target.value)}
+                  placeholder="荣记本草堂餐饮店  13760020096  前进中路6号首层105.106商铺"
+                  className="w-full h-40 px-3 py-2 border border-gray-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <p className="text-xs text-gray-400 mt-2 mb-3">
+                  每行一条数据，支持两种格式：<br/>
+                  逗号分隔：店铺名称,电话号码,地址<br/>
+                  空格/制表符分隔：店铺名称  电话号码  地址
+                </p>
+                {importResult && (
+                  <div className={`mb-3 p-3 rounded-lg text-sm whitespace-pre-wrap ${
+                    importResult.success === true ? 'bg-green-50 text-green-600' :
+                    importResult.success === false ? 'bg-red-50 text-red-600' :
+                    'bg-yellow-50 text-yellow-700'
+                  }`}>
+                    {importResult.message}
                   </div>
-                  <span className="text-sm text-gray-600 flex-shrink-0 font-mono">{shop.store_phone}</span>
-                  <button
-                    onClick={() => handleCopyPhone(shop)}
-                    className="-mr-1 p-1 flex items-center justify-center text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-full transition-colors"
-                    title={copiedId === shop.id ? '已复制' : '复制号码'}
-                  >
-                    {copiedId === shop.id
-                      ? <Check className="w-3.5 h-3.5" strokeWidth={2} />
-                      : <Copy className="w-3.5 h-3.5" strokeWidth={2} />}
-                  </button>
-                </div>
-              </div>
-
-              {expandedShops[shop.id] && (
-                <div className="mb-3 p-3 bg-amber-50/50 rounded-lg border border-amber-100">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-xs font-medium text-amber-700">同号店铺（{bigCount}家）</h4>
-                    {loadingRelated[phoneKey] && (
-                      <span className="text-[10px] text-amber-600">加载中...</span>
-                    )}
-                  </div>
-                  {relatedShops[phoneKey] ? (
-                    <div className="space-y-1.5">
-                      {relatedShops[phoneKey].map(s => (
-                        <div
-                          key={s.id}
-                          className={`flex items-start gap-2 text-xs p-1.5 rounded ${
-                            s.id === shop.id ? 'bg-amber-100/60' : 'hover:bg-amber-100/40'
-                          }`}
-                        >
-                          <MapPin className="w-3 h-3 text-amber-600 flex-shrink-0 mt-0.5" strokeWidth={2} />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1">
-                              <span className="font-medium text-gray-700 truncate">{s.store_name}</span>
-                              {s.id === shop.id && (
-                                <span className="text-[10px] text-amber-600 flex-shrink-0">本店</span>
-                              )}
-                            </div>
-                            <div className="text-gray-500 truncate">{s.store_address}</div>
-                          </div>
-                          {s.id !== shop.id && (
-                            <button
-                              onClick={() => handleCopyPhone(s)}
-                              className="p-1 flex items-center justify-center text-amber-500 hover:text-amber-700 hover:bg-amber-100 rounded transition-colors flex-shrink-0"
-                              title="复制号码"
-                            >
-                              <Copy className="w-3 h-3" strokeWidth={2} />
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : !loadingRelated[phoneKey] ? (
-                    <p className="text-[11px] text-gray-400">点击徽标重新加载</p>
-                  ) : null}
-                </div>
-              )}
-              
-              <div className="flex items-center gap-2 text-gray-600 mb-4">
-                <div className="w-7 h-7 rounded-full bg-green-50 flex items-center justify-center flex-shrink-0">
-                  <MapPin className="w-3.5 h-3.5 text-green-600" strokeWidth={2} />
-                </div>
-                <span className="text-sm leading-relaxed flex-1">{shop.store_address}</span>
-              </div>
-              
-              {feedback && (
-                <div className={`mb-3 p-2.5 rounded-lg text-sm font-medium whitespace-pre-wrap ${
-                  feedback.success === true ? 'bg-green-50 text-green-600 border border-green-200' : 'bg-red-50 text-red-600 border border-red-200'
-                }`}>
-                  {feedback.message}
-                </div>
-              )}
-              
-              <div className="flex gap-3">
-                <div className="flex flex-col gap-2 flex-1">
-                  <button
-                    onClick={() => handleCheck(shop, 'pass')}
-                    disabled={checking[shop.id]}
-                    className="flex-1 py-2 px-3 border border-gray-300 bg-gray-50 text-gray-600 rounded-lg text-sm font-semibold hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
-                  >
-                    Pass
-                  </button>
-                  <button
-                    onClick={() => handleCheck(shop, 'good')}
-                    disabled={checking[shop.id]}
-                    className="flex-1 py-2 px-3 border border-green-200 bg-green-50 text-green-600 rounded-lg text-sm font-semibold hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
-                  >
-                    Good
-                  </button>
-                </div>
+                )}
                 <button
-                  onClick={() => handleCopyPhone(shop)}
-                  className="flex-1 py-2 px-3 border border-blue-200 bg-blue-50 text-blue-600 rounded-lg text-sm font-semibold hover:bg-blue-100 transition-colors flex items-center justify-center"
+                  onClick={handleImport}
+                  disabled={importing}
+                  className="w-full py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                  {copiedId === shop.id ? '已复制' : 'Copy'}
+                  {importing ? '导入中...' : '确认导入'}
                 </button>
               </div>
-              
-              {sortedRecords.length > 0 && (
-                <div className="border-t border-gray-100 pt-3 mt-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-xs font-medium text-gray-500">检查记录</h4>
-                    <span className="text-xs text-gray-400">{sortedRecords.length}条</span>
+            )}
+            
+            {loading && (
+              <div className="flex items-center justify-center py-12">
+                <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            )}
+            
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+                <p className="text-red-600 text-sm">加载失败：{error}</p>
+                <button
+                  onClick={() => fetchShops()}
+                  className="mt-2 text-blue-600 text-sm font-medium"
+                >
+                  重试
+                </button>
+              </div>
+            )}
+            
+            {!loading && !error && shops.length === 0 && (
+              <div className="text-center py-12">
+                <p className="text-gray-500">暂无店铺数据</p>
+              </div>
+            )}
+            
+            {!loading && !error && shops.map((shop) => {
+              const phoneKey = normalizePhone(shop.store_phone)
+              const cidKey = 'cid:' + shop.id
+              const mergedRecords = [
+                ...(phoneKey ? (checkRecords[phoneKey] || []) : []),
+                ...(checkRecords[cidKey] || [])
+              ]
+              const sortedRecords = [...mergedRecords].sort((a, b) => new Date(b.check_time) - new Date(a.check_time))
+              const isBig = phoneKey && !!bigCustomerPhones[phoneKey]
+              const bigCount = isBig ? bigCustomerPhones[phoneKey] : 0
+              const feedback = checkFeedback[shop.id]
+
+              return (
+                <div
+                  key={shop.id}
+                  className={`bg-white rounded-xl shadow-sm p-4 transition-all duration-150 hover:shadow-md ${sortedRecords.length === 0 ? 'ring-4 ring-green-500' : ''}`}
+                >
+                  <div className="mb-3">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <h2 className="text-lg font-semibold text-gray-900 truncate">{shop.store_name}</h2>
+                      {isBig && (
+                        <button
+                          onClick={() => toggleExpandShop(shop)}
+                          className={`flex-shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold whitespace-nowrap transition-all shadow-sm ring-1 ring-amber-500/30 ${
+                            expandedShops[shop.id]
+                              ? 'bg-amber-600 text-white hover:bg-amber-700'
+                              : 'bg-amber-500 text-white hover:bg-amber-600'
+                          }`}
+                          title={expandedShops[shop.id] ? '收起同号店铺' : '展开同号店铺'}
+                        >
+                          <Crown className="w-3 h-3" strokeWidth={2.5} />
+                          大客户 · {bigCount}店
+                          <svg className={`w-2.5 h-2.5 transition-transform ${expandedShops[shop.id] ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0">
+                        <Phone className="w-3.5 h-3.5 text-blue-600" strokeWidth={2} />
+                      </div>
+                      <span className="text-sm text-gray-600 flex-shrink-0 font-mono">{shop.store_phone}</span>
+                      <button
+                        onClick={() => handleCopyPhone(shop)}
+                        className="-mr-1 p-1 flex items-center justify-center text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-full transition-colors"
+                        title={copiedId === shop.id ? '已复制' : '复制号码'}
+                      >
+                        {copiedId === shop.id
+                          ? <Check className="w-3.5 h-3.5" strokeWidth={2} />
+                          : <Copy className="w-3.5 h-3.5" strokeWidth={2} />}
+                      </button>
+                    </div>
                   </div>
-                  <div className="space-y-1.5">
-                    {sortedRecords.slice(0, 2).map((record, index) => {
-                      const date = new Date(record.check_time)
-                      const relativeTime = formatRelativeTime(record.check_time)
-                      const exactTime = `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
-                      
-                      return (
-                        <div key={record.id} className="flex items-center justify-between text-xs">
-                          <div className="flex items-center gap-2">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-medium w-12 text-center ${
-                              record.check_type === 'good' ? 'bg-green-100 text-green-700' :
-                              record.check_type === 'copy' ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'
-                            }`}>
-                              {record.check_type === 'good' ? 'Good' : record.check_type === 'copy' ? 'Copy' : 'Pass'}
-                            </span>
-                            <span className="text-gray-500">{record.operator}</span>
-                            <span className="text-gray-400">{relativeTime}</span>
-                          </div>
-                          <span className="text-gray-300 text-[10px]">{exactTime}</span>
+
+                  {expandedShops[shop.id] && (
+                    <div className="mb-3 p-3 bg-amber-50/50 rounded-lg border border-amber-100">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-xs font-medium text-amber-700">同号店铺（{bigCount}家）</h4>
+                        {loadingRelated[phoneKey] && (
+                          <span className="text-[10px] text-amber-600">加载中...</span>
+                        )}
+                      </div>
+                      {relatedShops[phoneKey] ? (
+                        <div className="space-y-1.5">
+                          {relatedShops[phoneKey].map(s => (
+                            <div
+                              key={s.id}
+                              className={`flex items-start gap-2 text-xs p-1.5 rounded ${
+                                s.id === shop.id ? 'bg-amber-100/60' : 'hover:bg-amber-100/40'
+                              }`}
+                            >
+                              <MapPin className="w-3 h-3 text-amber-600 flex-shrink-0 mt-0.5" strokeWidth={2} />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1">
+                                  <span className="font-medium text-gray-700 truncate">{s.store_name}</span>
+                                  {s.id === shop.id && (
+                                    <span className="text-[10px] text-amber-600 flex-shrink-0">本店</span>
+                                  )}
+                                </div>
+                                <div className="text-gray-500 truncate">{s.store_address}</div>
+                              </div>
+                              {s.id !== shop.id && (
+                                <button
+                                  onClick={() => handleCopyPhone(s)}
+                                  className="p-1 flex items-center justify-center text-amber-500 hover:text-amber-700 hover:bg-amber-100 rounded transition-colors flex-shrink-0"
+                                  title="复制号码"
+                                >
+                                  <Copy className="w-3 h-3" strokeWidth={2} />
+                                </button>
+                              )}
+                            </div>
+                          ))}
                         </div>
-                      )
-                    })}
-                    {sortedRecords.length > 2 && (
-                      <p className="text-xs text-gray-400 text-center mt-1">还有{sortedRecords.length - 2}条</p>
-                    )}
+                      ) : !loadingRelated[phoneKey] ? (
+                        <p className="text-[11px] text-gray-400">点击徽标重新加载</p>
+                      ) : null}
+                    </div>
+                  )}
+                  
+                  <div className="flex items-center gap-2 text-gray-600 mb-4">
+                    <div className="w-7 h-7 rounded-full bg-green-50 flex items-center justify-center flex-shrink-0">
+                      <MapPin className="w-3.5 h-3.5 text-green-600" strokeWidth={2} />
+                    </div>
+                    <span className="text-sm leading-relaxed flex-1">{shop.store_address}</span>
                   </div>
+                  
+                  {feedback && (
+                    <div className={`mb-3 p-2.5 rounded-lg text-sm font-medium whitespace-pre-wrap ${
+                      feedback.success === true ? 'bg-green-50 text-green-600 border border-green-200' : 'bg-red-50 text-red-600 border border-red-200'
+                    }`}>
+                      {feedback.message}
+                    </div>
+                  )}
+                  
+                  <div className="flex gap-3">
+                    <div className="flex flex-col gap-2 flex-1">
+                      <button
+                        onClick={() => handleCheck(shop, 'pass')}
+                        disabled={checking[shop.id]}
+                        className="flex-1 py-2 px-3 border border-gray-300 bg-gray-50 text-gray-600 rounded-lg text-sm font-semibold hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+                      >
+                        Pass
+                      </button>
+                      <button
+                        onClick={() => handleCheck(shop, 'good')}
+                        disabled={checking[shop.id]}
+                        className="flex-1 py-2 px-3 border border-green-200 bg-green-50 text-green-600 rounded-lg text-sm font-semibold hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+                      >
+                        Good
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => handleCopyPhone(shop)}
+                      className="flex-1 py-2 px-3 border border-blue-200 bg-blue-50 text-blue-600 rounded-lg text-sm font-semibold hover:bg-blue-100 transition-colors flex items-center justify-center"
+                    >
+                      {copiedId === shop.id ? '已复制' : 'Copy'}
+                    </button>
+                  </div>
+                  
+                  {sortedRecords.length > 0 && (
+                    <div className="border-t border-gray-100 pt-3 mt-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-xs font-medium text-gray-500">检查记录</h4>
+                        <span className="text-xs text-gray-400">{sortedRecords.length}条</span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {sortedRecords.slice(0, 2).map((record, index) => {
+                          const date = new Date(record.check_time)
+                          const relativeTime = formatRelativeTime(record.check_time)
+                          const exactTime = `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
+                          
+                          return (
+                            <div key={record.id} className="flex items-center justify-between text-xs">
+                              <div className="flex items-center gap-2">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-medium w-12 text-center ${
+                                  record.check_type === 'good' ? 'bg-green-100 text-green-700' :
+                                  record.check_type === 'copy' ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'
+                                }`}>
+                                  {record.check_type === 'good' ? 'Good' : record.check_type === 'copy' ? 'Copy' : 'Pass'}
+                                </span>
+                                <span className="text-gray-500">{record.operator}</span>
+                                <span className="text-gray-400">{relativeTime}</span>
+                              </div>
+                              <span className="text-gray-300 text-[10px]">{exactTime}</span>
+                            </div>
+                          )
+                        })}
+                        {sortedRecords.length > 2 && (
+                          <p className="text-xs text-gray-400 text-center mt-1">还有{sortedRecords.length - 2}条</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          )
-        })}
-        
-        {isLoadingMore && (
-          <div className="flex items-center justify-center py-4">
-            <div className="w-6 h-6 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-          </div>
-        )}
-        
-        {!loading && !error && shops.length > 0 && !hasMore && !isLoadingMore && (
-          <div className="text-center py-4">
-            <p className="text-sm text-gray-400">已加载全部店铺</p>
-          </div>
-        )}
-      </main>
+              )
+            })}
+          </main>
         </div>
       )}
     </div>
