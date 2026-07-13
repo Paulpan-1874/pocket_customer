@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 function formatRelativeTime(dateStr) {
   const date = new Date(dateStr)
@@ -22,6 +22,9 @@ function ShopList() {
   const [shops, setShops] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [hasMore, setHasMore] = useState(true)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [importText, setImportText] = useState('')
   const [importing, setImporting] = useState(false)
@@ -37,28 +40,60 @@ function ShopList() {
   const [loginError, setLoginError] = useState('')
   const [loginLoading, setLoginLoading] = useState(false)
 
+  const PAGE_SIZE = 20
+  const loadingRef = useRef(false)
+
   useEffect(() => {
-    fetchShops()
+    fetchShops(1)
   }, [])
 
-  async function fetchShops() {
+  useEffect(() => {
+    const handleScroll = () => {
+      if (loadingRef.current || !hasMore) return
+      const scrollTop = document.documentElement.scrollTop || document.body.scrollTop
+      const scrollHeight = document.documentElement.scrollHeight || document.body.scrollHeight
+      const clientHeight = document.documentElement.clientHeight || window.innerHeight
+      if (scrollTop + clientHeight >= scrollHeight - 100) {
+        fetchShops(currentPage + 1)
+      }
+    }
+    window.addEventListener('scroll', handleScroll)
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [hasMore, currentPage])
+
+  async function fetchShops(page = 1) {
+    if (loadingRef.current) return
+    loadingRef.current = true
     try {
-      setLoading(true)
+      if (page === 1) {
+        setLoading(true)
+      } else {
+        setIsLoadingMore(true)
+      }
       setError(null)
       const headers = {}
       if (authToken) {
         headers['Authorization'] = `Bearer ${authToken}`
       }
-      const response = await fetch('/api/collections/customers/records?page=1&perPage=50', { headers })
+      const response = await fetch(`/api/collections/customers/records?page=${page}&perPage=${PAGE_SIZE}`, { headers })
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`)
       }
       const data = await response.json()
-      setShops(data.items)
+      if (page === 1) {
+        setShops(data.items)
+      } else {
+        setShops(prev => [...prev, ...data.items])
+      }
+      setHasMore(data.page < data.totalPages)
+      setCurrentPage(page)
+      await fetchCheckRecords()
     } catch (err) {
       setError(err.message)
     } finally {
+      loadingRef.current = false
       setLoading(false)
+      setIsLoadingMore(false)
     }
   }
 
@@ -361,7 +396,9 @@ function ShopList() {
           message: `部分导入成功：成功 ${successCount} 条，失败 ${failCount} 条\n${errorDetails}${errors.length > 3 ? `\n...还有${errors.length - 3}条错误` : ''}`
         })
       }
-      await fetchShops()
+      setCurrentPage(1)
+      setHasMore(true)
+      await fetchShops(1)
     } catch (err) {
       setImportResult({ success: false, message: `导入失败：${err.message}` })
     } finally {
@@ -620,6 +657,18 @@ function ShopList() {
             </div>
           )
         })}
+        
+        {isLoadingMore && (
+          <div className="flex items-center justify-center py-4">
+            <div className="w-6 h-6 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        )}
+        
+        {!loading && !error && shops.length > 0 && !hasMore && !isLoadingMore && (
+          <div className="text-center py-4">
+            <p className="text-sm text-gray-400">已加载全部店铺</p>
+          </div>
+        )}
       </main>
         </div>
       )}
