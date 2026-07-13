@@ -215,6 +215,32 @@ function ShopList() {
     }
   }
 
+  async function handleCopyPhone(customerId, phone) {
+    navigator.clipboard.writeText(phone)
+    setCopiedId(customerId)
+    setTimeout(() => setCopiedId(null), 1500)
+
+    if (!isLoggedIn) return
+
+    try {
+      await fetch('/api/collections/check_records/records', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({
+          customer_id: customerId,
+          select: 'copy',
+          relation: currentUser?.id || currentUser?.name || currentUser?.username || currentUser?.email || '未知用户'
+        })
+      })
+      await fetchCheckRecords()
+    } catch (err) {
+      console.log('保存复制记录失败:', err)
+    }
+  }
+
   async function handleImport() {
     if (!importText.trim()) {
       setImportResult({ success: false, message: '请输入导入数据' })
@@ -511,11 +537,7 @@ function ShopList() {
                   </div>
                   <span className="text-sm text-gray-600 flex-shrink-0 font-mono">{shop.store_phone}</span>
                   <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(shop.store_phone)
-                      setCopiedId(shop.id)
-                      setTimeout(() => setCopiedId(null), 1500)
-                    }}
+                    onClick={() => handleCopyPhone(shop.id, shop.store_phone)}
                     className="w-8 h-8 flex items-center justify-center text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-full transition-colors"
                     title={copiedId === shop.id ? '已复制' : '复制号码'}
                   >
@@ -583,9 +605,10 @@ function ShopList() {
                         <div key={record.id} className="flex items-center justify-between text-xs">
                           <div className="flex items-center gap-2">
                             <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                              record.check_type === 'good' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+                              record.check_type === 'good' ? 'bg-green-100 text-green-700' :
+                              record.check_type === 'copy' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'
                             }`}>
-                              {record.check_type === 'good' ? 'Good' : 'Pass'}
+                              {record.check_type === 'good' ? 'Good' : record.check_type === 'copy' ? 'Copy' : 'Pass'}
                             </span>
                             <span className="text-gray-500">{record.operator}</span>
                             <span className="text-gray-400">{relativeTime}</span>
