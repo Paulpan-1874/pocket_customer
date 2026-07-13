@@ -251,9 +251,25 @@ function ShopList() {
   }
 
   async function handleCopyPhone(customerId, phone) {
-    navigator.clipboard.writeText(phone)
-    setCopiedId(customerId)
-    setTimeout(() => setCopiedId(null), 1500)
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(phone)
+      } else {
+        const textArea = document.createElement('textarea')
+        textArea.value = phone
+        textArea.style.position = 'fixed'
+        textArea.style.left = '-9999px'
+        document.body.appendChild(textArea)
+        textArea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textArea)
+      }
+      setCopiedId(customerId)
+      setTimeout(() => setCopiedId(null), 1500)
+    } catch (err) {
+      console.log('复制失败:', err)
+      return
+    }
 
     if (!isLoggedIn) return
 
