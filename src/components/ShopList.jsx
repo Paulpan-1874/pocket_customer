@@ -248,7 +248,6 @@ function ShopList() {
         throw new Error(errorData.message || `HTTP ${response.status}`)
       }
 
-      setCheckFeedback(prev => ({ ...prev, [customerId]: { success: true, message: `${checkType === 'good' ? 'Good' : 'Pass'} 记录已保存` } }))
       await fetchCheckRecords()
     } catch (err) {
       setCheckFeedback(prev => ({ ...prev, [customerId]: { success: false, message: `保存失败：${err.message}` } }))
