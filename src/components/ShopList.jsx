@@ -50,18 +50,20 @@ function ShopList() {
       if (authToken) {
         headers['Authorization'] = `Bearer ${authToken}`
       }
-      const response = await fetch('/api/collections/check_records/records?page=1&perPage=200', { headers })
+      const response = await fetch('/api/collections/check_records/records?page=1&perPage=200&expand=relation', { headers })
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`)
       }
       const data = await response.json()
       const recordsByCustomer = {}
       data.items.forEach(record => {
+        const relationData = record.expand?.relation
+        const operatorName = relationData?.name || relationData?.username || relationData?.email || record.relation
         const mappedRecord = {
           id: record.id,
           customer_id: record.customer_id,
           check_type: record.select,
-          operator: record.relation,
+          operator: operatorName,
           check_time: record.created
         }
         if (!recordsByCustomer[record.customer_id]) {
