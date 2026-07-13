@@ -1,5 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
-import { Phone, Copy, Check, MapPin } from 'lucide-react'
+import { Phone, Copy, Check, MapPin, Crown } from 'lucide-react'
+
+function normalizePhone(phone) {
+  if (!phone) return ''
+  return String(phone).replace(/[\s\-]/g, '').replace(/^\+?86/, '')
+}
 
 function formatRelativeTime(dateStr) {
   const date = new Date(dateStr)
@@ -40,6 +45,10 @@ function ShopList() {
   const [loginForm, setLoginForm] = useState({ email: '', password: '' })
   const [loginError, setLoginError] = useState('')
   const [loginLoading, setLoginLoading] = useState(false)
+  const [bigCustomerPhones, setBigCustomerPhones] = useState({})
+  const [expandedShops, setExpandedShops] = useState({})
+  const [relatedShops, setRelatedShops] = useState({})
+  const [loadingRelated, setLoadingRelated] = useState({})
 
   const PAGE_SIZE = 20
   const loadingRef = useRef(false)
@@ -55,6 +64,7 @@ function ShopList() {
 
   useEffect(() => {
     fetchShops(1)
+    fetchBigCustomerPhones()
   }, [])
 
   useEffect(() => {
@@ -70,6 +80,66 @@ function ShopList() {
     window.addEventListener('scroll', handleScroll)
     return () => window.removeEventListener('scroll', handleScroll)
   }, [hasMore, currentPage])
+
+  async function fetchBigCustomerPhones() {
+    try {
+      const headers = {}
+      if (authToken) {
+        headers['Authorization'] = `Bearer ${authToken}`
+      }
+      const map = {}
+      let page = 1, totalPages = 1
+      while (page <= totalPages) {
+        const res = await fetch(`/api/collections/customer_phone_counts/records?page=${page}&perPage=1000`, { headers })
+        if (!res.ok) break
+        const data = await res.json()
+        totalPages = data.totalPages
+        data.items.forEach(item => {
+          const p = normalizePhone(item.store_phone)
+          if (p && item.shop_count >= 2) map[p] = item.shop_count
+        })
+        page++
+      }
+      setBigCustomerPhones(map)
+    } catch (err) {
+      console.log('获取大客户列表失败:', err)
+    }
+  }
+
+  async function fetchRelatedShops(phoneKey) {
+    if (relatedShops[phoneKey] || loadingRelated[phoneKey]) return
+    setLoadingRelated(prev => ({ ...prev, [phoneKey]: true }))
+    try {
+      const headers = {}
+      if (authToken) {
+        headers['Authorization'] = `Bearer ${authToken}`
+      }
+      const filter = encodeURIComponent(`store_phone="${phoneKey}"`)
+      const res = await fetch(`/api/collections/customers/records?filter=${filter}&perPage=100`, { headers })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      setRelatedShops(prev => ({ ...prev, [phoneKey]: data.items }))
+    } catch (err) {
+      console.log('获取同号店铺失败:', err)
+    } finally {
+      setLoadingRelated(prev => ({ ...prev, [phoneKey]: false }))
+    }
+  }
+
+  function toggleExpandShop(shop) {
+    const phoneKey = normalizePhone(shop.store_phone)
+    if (!phoneKey) return
+    setExpandedShops(prev => {
+      const next = { ...prev }
+      if (next[shop.id]) {
+        delete next[shop.id]
+      } else {
+        next[shop.id] = true
+        fetchRelatedShops(phoneKey)
+      }
+      return next
+    })
+  }
 
   async function fetchShops(page = 1) {
     if (loadingRef.current) return
@@ -119,23 +189,26 @@ function ShopList() {
         throw new Error(`HTTP ${response.status}`)
       }
       const data = await response.json()
-      const recordsByCustomer = {}
+      const recordsByPhone = {}
       data.items.forEach(record => {
         const relationData = record.expand?.relation
         const operatorName = relationData?.name || relationData?.username || relationData?.email || record.relation
         const mappedRecord = {
           id: record.id,
           customer_id: record.customer_id,
+          store_name: record.store_name || '',
           check_type: record.select,
           operator: operatorName,
           check_time: record.created
         }
-        if (!recordsByCustomer[record.customer_id]) {
-          recordsByCustomer[record.customer_id] = []
+        const p = normalizePhone(record.store_phone)
+        const key = p ? p : ('cid:' + record.customer_id)
+        if (!recordsByPhone[key]) {
+          recordsByPhone[key] = []
         }
-        recordsByCustomer[record.customer_id].push(mappedRecord)
+        recordsByPhone[key].push(mappedRecord)
       })
-      setCheckRecords(recordsByCustomer)
+      setCheckRecords(recordsByPhone)
     } catch (err) {
       console.log('获取检查记录失败:', err)
     }
@@ -221,14 +294,14 @@ function ShopList() {
     localStorage.removeItem('pb_auth_token')
   }
 
-  async function handleCheck(customerId, checkType) {
+  async function handleCheck(shop, checkType) {
     if (!isLoggedIn) {
-      setCheckFeedback(prev => ({ ...prev, [customerId]: { success: false, message: '请先登录' } }))
+      setCheckFeedback(prev => ({ ...prev, [shop.id]: { success: false, message: '请先登录' } }))
       return
     }
 
-    setChecking(prev => ({ ...prev, [customerId]: true }))
-    setCheckFeedback(prev => ({ ...prev, [customerId]: null }))
+    setChecking(prev => ({ ...prev, [shop.id]: true }))
+    setCheckFeedback(prev => ({ ...prev, [shop.id]: null }))
 
     try {
       const response = await fetch('/api/collections/check_records/records', {
@@ -238,9 +311,11 @@ function ShopList() {
           'Authorization': `Bearer ${authToken}`
         },
         body: JSON.stringify({
-          customer_id: customerId,
+          customer_id: shop.id,
           select: checkType,
-          relation: currentUser?.id || currentUser?.name || currentUser?.username || currentUser?.email || '未知用户'
+          relation: currentUser?.id || currentUser?.name || currentUser?.username || currentUser?.email || '未知用户',
+          store_phone: normalizePhone(shop.store_phone),
+          store_name: shop.store_name
         })
       })
 
@@ -251,22 +326,22 @@ function ShopList() {
 
       await fetchCheckRecords()
     } catch (err) {
-      setCheckFeedback(prev => ({ ...prev, [customerId]: { success: false, message: `保存失败：${err.message}` } }))
+      setCheckFeedback(prev => ({ ...prev, [shop.id]: { success: false, message: `保存失败：${err.message}` } }))
     } finally {
-      setChecking(prev => ({ ...prev, [customerId]: false }))
+      setChecking(prev => ({ ...prev, [shop.id]: false }))
       setTimeout(() => {
-        setCheckFeedback(prev => ({ ...prev, [customerId]: null }))
+        setCheckFeedback(prev => ({ ...prev, [shop.id]: null }))
       }, 3000)
     }
   }
 
-  async function handleCopyPhone(customerId, phone) {
+  async function handleCopyPhone(shop) {
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(phone)
+        await navigator.clipboard.writeText(shop.store_phone)
       } else {
         const textArea = document.createElement('textarea')
-        textArea.value = phone
+        textArea.value = shop.store_phone
         textArea.style.position = 'fixed'
         textArea.style.left = '-9999px'
         document.body.appendChild(textArea)
@@ -274,7 +349,7 @@ function ShopList() {
         document.execCommand('copy')
         document.body.removeChild(textArea)
       }
-      setCopiedId(customerId)
+      setCopiedId(shop.id)
       setTimeout(() => setCopiedId(null), 1500)
     } catch (err) {
       console.log('复制失败:', err)
@@ -291,9 +366,11 @@ function ShopList() {
           'Authorization': `Bearer ${authToken}`
         },
         body: JSON.stringify({
-          customer_id: customerId,
+          customer_id: shop.id,
           select: 'copy',
-          relation: currentUser?.id || currentUser?.name || currentUser?.username || currentUser?.email || '未知用户'
+          relation: currentUser?.id || currentUser?.name || currentUser?.username || currentUser?.email || '未知用户',
+          store_phone: normalizePhone(shop.store_phone),
+          store_name: shop.store_name
         })
       })
       await fetchCheckRecords()
@@ -353,7 +430,7 @@ function ShopList() {
         continue
       }
       
-      records.push({ store_name, store_phone, store_address })
+      records.push({ store_name, store_phone: normalizePhone(store_phone), store_address })
     }
 
     if (records.length === 0) {
@@ -581,24 +658,50 @@ function ShopList() {
         )}
         
         {!loading && !error && shops.map((shop) => {
-          const shopRecords = checkRecords[shop.id] || []
-          const sortedRecords = [...shopRecords].sort((a, b) => new Date(b.check_time) - new Date(a.check_time))
+          const phoneKey = normalizePhone(shop.store_phone)
+          const cidKey = 'cid:' + shop.id
+          const mergedRecords = [
+            ...(phoneKey ? (checkRecords[phoneKey] || []) : []),
+            ...(checkRecords[cidKey] || [])
+          ]
+          const sortedRecords = [...mergedRecords].sort((a, b) => new Date(b.check_time) - new Date(a.check_time))
+          const isBig = phoneKey && !!bigCustomerPhones[phoneKey]
+          const bigCount = isBig ? bigCustomerPhones[phoneKey] : 0
           const feedback = checkFeedback[shop.id]
-          
+
           return (
             <div
               key={shop.id}
               className={`bg-white rounded-xl shadow-sm p-4 transition-all duration-150 hover:shadow-md ${sortedRecords.length === 0 ? 'ring-4 ring-green-500' : ''}`}
             >
               <div className="mb-3">
-                <h2 className="text-lg font-semibold text-gray-900 truncate mb-2">{shop.store_name}</h2>
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <h2 className="text-lg font-semibold text-gray-900 truncate">{shop.store_name}</h2>
+                  {isBig && (
+                    <button
+                      onClick={() => toggleExpandShop(shop)}
+                      className={`flex-shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold whitespace-nowrap transition-all shadow-sm ring-1 ring-amber-500/30 ${
+                        expandedShops[shop.id]
+                          ? 'bg-amber-600 text-white hover:bg-amber-700'
+                          : 'bg-amber-500 text-white hover:bg-amber-600'
+                      }`}
+                      title={expandedShops[shop.id] ? '收起同号店铺' : '展开同号店铺'}
+                    >
+                      <Crown className="w-3 h-3" strokeWidth={2.5} />
+                      大客户 · {bigCount}店
+                      <svg className={`w-2.5 h-2.5 transition-transform ${expandedShops[shop.id] ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
                 <div className="flex items-center gap-2">
                   <div className="w-7 h-7 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0">
                     <Phone className="w-3.5 h-3.5 text-blue-600" strokeWidth={2} />
                   </div>
                   <span className="text-sm text-gray-600 flex-shrink-0 font-mono">{shop.store_phone}</span>
                   <button
-                    onClick={() => handleCopyPhone(shop.id, shop.store_phone)}
+                    onClick={() => handleCopyPhone(shop)}
                     className="-mr-1 p-1 flex items-center justify-center text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-full transition-colors"
                     title={copiedId === shop.id ? '已复制' : '复制号码'}
                   >
@@ -608,6 +711,51 @@ function ShopList() {
                   </button>
                 </div>
               </div>
+
+              {expandedShops[shop.id] && (
+                <div className="mb-3 p-3 bg-amber-50/50 rounded-lg border border-amber-100">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-xs font-medium text-amber-700">同号店铺（{bigCount}家）</h4>
+                    {loadingRelated[phoneKey] && (
+                      <span className="text-[10px] text-amber-600">加载中...</span>
+                    )}
+                  </div>
+                  {relatedShops[phoneKey] ? (
+                    <div className="space-y-1.5">
+                      {relatedShops[phoneKey].map(s => (
+                        <div
+                          key={s.id}
+                          className={`flex items-start gap-2 text-xs p-1.5 rounded ${
+                            s.id === shop.id ? 'bg-amber-100/60' : 'hover:bg-amber-100/40'
+                          }`}
+                        >
+                          <MapPin className="w-3 h-3 text-amber-600 flex-shrink-0 mt-0.5" strokeWidth={2} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1">
+                              <span className="font-medium text-gray-700 truncate">{s.store_name}</span>
+                              {s.id === shop.id && (
+                                <span className="text-[10px] text-amber-600 flex-shrink-0">本店</span>
+                              )}
+                            </div>
+                            <div className="text-gray-500 truncate">{s.store_address}</div>
+                          </div>
+                          {s.id !== shop.id && (
+                            <button
+                              onClick={() => handleCopyPhone(s)}
+                              className="p-1 flex items-center justify-center text-amber-500 hover:text-amber-700 hover:bg-amber-100 rounded transition-colors flex-shrink-0"
+                              title="复制号码"
+                            >
+                              <Copy className="w-3 h-3" strokeWidth={2} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : !loadingRelated[phoneKey] ? (
+                    <p className="text-[11px] text-gray-400">点击徽标重新加载</p>
+                  ) : null}
+                </div>
+              )}
               
               <div className="flex items-center gap-2 text-gray-600 mb-4">
                 <div className="w-7 h-7 rounded-full bg-green-50 flex items-center justify-center flex-shrink-0">
@@ -627,14 +775,14 @@ function ShopList() {
               <div className="flex gap-3">
                 <div className="flex flex-col gap-2 flex-1">
                   <button
-                    onClick={() => handleCheck(shop.id, 'pass')}
+                    onClick={() => handleCheck(shop, 'pass')}
                     disabled={checking[shop.id]}
                     className="flex-1 py-2 px-3 border border-gray-300 bg-gray-50 text-gray-600 rounded-lg text-sm font-semibold hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
                   >
                     Pass
                   </button>
                   <button
-                    onClick={() => handleCheck(shop.id, 'good')}
+                    onClick={() => handleCheck(shop, 'good')}
                     disabled={checking[shop.id]}
                     className="flex-1 py-2 px-3 border border-green-200 bg-green-50 text-green-600 rounded-lg text-sm font-semibold hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
                   >
@@ -642,7 +790,7 @@ function ShopList() {
                   </button>
                 </div>
                 <button
-                  onClick={() => handleCopyPhone(shop.id, shop.store_phone)}
+                  onClick={() => handleCopyPhone(shop)}
                   className="flex-1 py-2 px-3 border border-blue-200 bg-blue-50 text-blue-600 rounded-lg text-sm font-semibold hover:bg-blue-100 transition-colors flex items-center justify-center"
                 >
                   {copiedId === shop.id ? '已复制' : 'Copy'}
@@ -666,7 +814,7 @@ function ShopList() {
                           <div className="flex items-center gap-2">
                             <span className={`px-2 py-0.5 rounded text-[10px] font-medium w-12 text-center ${
                               record.check_type === 'good' ? 'bg-green-100 text-green-700' :
-                              record.check_type === 'copy' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'
+                              record.check_type === 'copy' ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'
                             }`}>
                               {record.check_type === 'good' ? 'Good' : record.check_type === 'copy' ? 'Copy' : 'Pass'}
                             </span>
