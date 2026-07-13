@@ -38,39 +38,107 @@ function ShopList() {
 
     const lines = importText.trim().split('\n').filter(line => line.trim())
     const records = []
+    const validationErrors = []
 
-    for (const line of lines) {
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      const lineNum = i + 1
       const parts = line.split(',')
-      if (parts.length >= 3) {
-        records.push({
-          store_name: parts[0].trim(),
-          store_phone: parts[1].trim(),
-          store_address: parts.slice(2).join(',').trim()
-        })
+      
+      if (parts.length < 3) {
+        validationErrors.push(`第${lineNum}行: 格式不正确，缺少必要字段`)
+        continue
       }
+      
+      const store_name = parts[0].trim()
+      const store_phone = parts[1].trim()
+      const store_address = parts.slice(2).join(',').trim()
+      
+      if (!store_name) {
+        validationErrors.push(`第${lineNum}行: 店铺名称不能为空`)
+        continue
+      }
+      
+      if (!store_phone) {
+        validationErrors.push(`第${lineNum}行: 电话号码不能为空`)
+        continue
+      }
+      
+      if (!/^1[3-9]\d{9}$/.test(store_phone)) {
+        validationErrors.push(`第${lineNum}行: 电话号码格式不正确（应为11位手机号）`)
+        continue
+      }
+      
+      if (!store_address) {
+        validationErrors.push(`第${lineNum}行: 地址不能为空`)
+        continue
+      }
+      
+      records.push({ store_name, store_phone, store_address })
     }
 
     if (records.length === 0) {
-      setImportResult({ success: false, message: '未解析到有效数据，请检查格式' })
+      const errorMsg = validationErrors.length > 0 
+        ? `数据验证失败：\n${validationErrors.slice(0, 5).join('\n')}${validationErrors.length > 5 ? `\n...还有${validationErrors.length - 5}条错误` : ''}`
+        : '未解析到有效数据，请检查格式'
+      setImportResult({ success: false, message: errorMsg })
       return
+    }
+
+    if (validationErrors.length > 0) {
+      const warningMsg = `发现${validationErrors.length}条无效数据已跳过：\n${validationErrors.slice(0, 3).join('\n')}${validationErrors.length > 3 ? `\n...还有${validationErrors.length - 3}条错误` : ''}`
+      setImportResult({ success: null, message: warningMsg })
     }
 
     try {
       setImporting(true)
       setImportResult(null)
 
-      for (const record of records) {
-        await fetch('/api/collections/customers/records', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(record)
-        })
+      let successCount = 0
+      let failCount = 0
+      const errors = []
+
+      for (let i = 0; i < records.length; i++) {
+        const record = records[i]
+        try {
+          const response = await fetch('/api/collections/customers/records', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(record)
+          })
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ message: response.statusText }))
+            throw new Error(errorData.message || `HTTP ${response.status}`)
+          }
+          successCount++
+        } catch (err) {
+          failCount++
+          errors.push({
+            line: i + 1,
+            name: record.store_name,
+            message: err.message
+          })
+        }
       }
 
-      setImportResult({ success: true, message: `成功导入 ${records.length} 条数据` })
-      setImportText('')
+      if (failCount === 0) {
+        setImportResult({ success: true, message: `成功导入 ${successCount} 条数据` })
+        setImportText('')
+      } else if (successCount === 0) {
+        const errorDetails = errors.slice(0, 3).map(e => `第${e.line}行(${e.name}): ${e.message}`).join('\n')
+        setImportResult({
+          success: false,
+          message: `全部导入失败！\n${errorDetails}${errors.length > 3 ? `\n...还有${errors.length - 3}条错误` : ''}`
+        })
+      } else {
+        const errorDetails = errors.slice(0, 3).map(e => `第${e.line}行(${e.name}): ${e.message}`).join('\n')
+        setImportResult({
+          success: true,
+          message: `部分导入成功：成功 ${successCount} 条，失败 ${failCount} 条\n${errorDetails}${errors.length > 3 ? `\n...还有${errors.length - 3}条错误` : ''}`
+        })
+      }
       await fetchShops()
     } catch (err) {
       setImportResult({ success: false, message: `导入失败：${err.message}` })
@@ -112,8 +180,10 @@ function ShopList() {
               每行一条数据，格式：店铺名称,电话号码,地址
             </p>
             {importResult && (
-              <div className={`mb-3 p-2 rounded-lg text-sm ${
-                importResult.success ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'
+              <div className={`mb-3 p-3 rounded-lg text-sm whitespace-pre-wrap ${
+                importResult.success === true ? 'bg-green-50 text-green-600' :
+                importResult.success === false ? 'bg-red-50 text-red-600' :
+                'bg-yellow-50 text-yellow-700'
               }`}>
                 {importResult.message}
               </div>
