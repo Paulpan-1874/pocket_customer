@@ -43,7 +43,13 @@ function ShopList() {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]
       const lineNum = i + 1
-      const parts = line.split(',')
+      
+      let parts
+      if (line.includes(',')) {
+        parts = line.split(',')
+      } else {
+        parts = line.split(/\s{2,}|\t+/).filter(p => p.trim())
+      }
       
       if (parts.length < 3) {
         validationErrors.push(`第${lineNum}行: 格式不正确，缺少必要字段`)
@@ -64,8 +70,9 @@ function ShopList() {
         continue
       }
       
-      if (!/^1[3-9]\d{9}$/.test(store_phone)) {
-        validationErrors.push(`第${lineNum}行: 电话号码格式不正确（应为11位手机号）`)
+      const phoneRegex = /^(1[3-9]\d{9}|400\d{7}|400-\d{3}-\d{4}|0\d{2,3}-\d{7,8}|0\d{2,3}\d{7,8})$/
+      if (!phoneRegex.test(store_phone)) {
+        validationErrors.push(`第${lineNum}行: 电话号码格式不正确`)
         continue
       }
       
@@ -173,11 +180,13 @@ function ShopList() {
             <textarea
               value={importText}
               onChange={(e) => setImportText(e.target.value)}
-              placeholder="港式手撕鸡,15016380172,端州一路38号君安峰景湾花苑A1A2A3幢首层第7卡"
+              placeholder="荣记本草堂餐饮店  13760020096  前进中路6号首层105.106商铺"
               className="w-full h-40 px-3 py-2 border border-gray-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
             <p className="text-xs text-gray-400 mt-2 mb-3">
-              每行一条数据，格式：店铺名称,电话号码,地址
+              每行一条数据，支持两种格式：<br/>
+              逗号分隔：店铺名称,电话号码,地址<br/>
+              空格/制表符分隔：店铺名称  电话号码  地址
             </p>
             {importResult && (
               <div className={`mb-3 p-3 rounded-lg text-sm whitespace-pre-wrap ${
