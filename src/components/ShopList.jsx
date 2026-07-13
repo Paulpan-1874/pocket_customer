@@ -1,5 +1,23 @@
 import { useState, useEffect } from 'react'
 
+function formatRelativeTime(dateStr) {
+  const date = new Date(dateStr)
+  const now = new Date()
+  const diff = now.getTime() - date.getTime()
+  
+  const minutes = Math.floor(diff / 60000)
+  const hours = Math.floor(diff / 3600000)
+  const days = Math.floor(diff / 86400000)
+  const weeks = Math.floor(diff / 604800000)
+  
+  if (minutes < 1) return '刚刚'
+  if (minutes < 60) return `${minutes}分钟前`
+  if (hours < 24) return `${hours}小时前`
+  if (days < 7) return `${days}天前`
+  if (weeks < 4) return `${weeks}周前`
+  return `${date.getMonth() + 1}/${date.getDate()}`
+}
+
 function ShopList() {
   const [shops, setShops] = useState([])
   const [loading, setLoading] = useState(true)
@@ -481,7 +499,7 @@ function ShopList() {
           return (
             <div
               key={shop.id}
-              className="bg-white rounded-xl shadow-sm p-4 active:scale-[0.99] transition-all duration-150 hover:shadow-md"
+              className={`bg-white rounded-xl shadow-sm p-4 active:scale-[0.99] transition-all duration-150 hover:shadow-md ${sortedRecords.length === 0 ? 'ring-4 ring-green-500' : ''}`}
             >
               <div className="flex items-center gap-2 mb-3">
                 <h2 className="text-lg font-semibold text-gray-900 flex-1 truncate">{shop.store_name}</h2>
@@ -528,16 +546,6 @@ function ShopList() {
               
               <div className="flex items-center gap-3">
                 <button
-                  onClick={() => handleCheck(shop.id, 'good')}
-                  disabled={checking[shop.id]}
-                  className="flex-1 py-3 px-4 bg-green-500 text-white rounded-lg text-base font-semibold hover:bg-green-600 hover:shadow-lg hover:shadow-green-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none transition-all flex items-center justify-center gap-2 active:scale-95"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Good
-                </button>
-                <button
                   onClick={() => handleCheck(shop.id, 'pass')}
                   disabled={checking[shop.id]}
                   className="flex-1 py-3 px-4 bg-gray-100 text-gray-700 rounded-lg text-base font-semibold hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 active:scale-95"
@@ -546,6 +554,16 @@ function ShopList() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
                   </svg>
                   Pass
+                </button>
+                <button
+                  onClick={() => handleCheck(shop.id, 'good')}
+                  disabled={checking[shop.id]}
+                  className="flex-1 py-3 px-4 bg-green-500 text-white rounded-lg text-base font-semibold hover:bg-green-600 hover:shadow-lg hover:shadow-green-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none transition-all flex items-center justify-center gap-2 active:scale-95"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Good
                 </button>
               </div>
               
@@ -558,7 +576,8 @@ function ShopList() {
                   <div className="space-y-1.5">
                     {sortedRecords.slice(0, 2).map((record, index) => {
                       const date = new Date(record.check_time)
-                      const timeStr = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
+                      const relativeTime = formatRelativeTime(record.check_time)
+                      const exactTime = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
                       
                       return (
                         <div key={record.id} className="flex items-center justify-between text-xs">
@@ -569,8 +588,8 @@ function ShopList() {
                               {record.check_type === 'good' ? 'Good' : 'Pass'}
                             </span>
                             <span className="text-gray-500">{record.operator}</span>
+                            <span className="text-gray-400">{relativeTime}</span>
                           </div>
-                          <span className="text-gray-400">{timeStr}</span>
                         </div>
                       )
                     })}
