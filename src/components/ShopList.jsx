@@ -525,7 +525,7 @@ function ShopList() {
           return (
             <div
               key={shop.id}
-              className={`bg-white rounded-xl shadow-sm p-4 active:scale-[0.99] transition-all duration-150 hover:shadow-md ${sortedRecords.length === 0 ? 'ring-4 ring-green-500' : ''}`}
+              className={`bg-white rounded-xl shadow-sm p-4 transition-all duration-150 hover:shadow-md ${sortedRecords.length === 0 ? 'ring-4 ring-green-500' : ''}`}
             >
               <div className="flex items-center gap-2 mb-3">
                 <h2 className="text-lg font-semibold text-gray-900 flex-1 truncate">{shop.store_name}</h2>
@@ -599,7 +599,7 @@ function ShopList() {
                     {sortedRecords.slice(0, 2).map((record, index) => {
                       const date = new Date(record.check_time)
                       const relativeTime = formatRelativeTime(record.check_time)
-                      const exactTime = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
+                      const exactTime = `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
                       
                       return (
                         <div key={record.id} className="flex items-center justify-between text-xs">
@@ -613,6 +613,7 @@ function ShopList() {
                             <span className="text-gray-500">{record.operator}</span>
                             <span className="text-gray-400">{relativeTime}</span>
                           </div>
+                          <span className="text-gray-300 text-[10px]">{exactTime}</span>
                         </div>
                       )
                     })}
