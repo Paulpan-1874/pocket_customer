@@ -49,12 +49,13 @@ function ShopList() {
   const [importTag, setImportTag] = useState('')
   const [tagFilter, setTagFilter] = useState('')
 
-  const loadingRef = useRef(false)
+  useEffect(() => {
+    fetchBigCustomerPhones()
+  }, [])
 
   useEffect(() => {
     fetchShops()
-    fetchBigCustomerPhones()
-  }, [])
+  }, [tagFilter])
 
   useEffect(() => {
     if (authToken) {
@@ -63,9 +64,6 @@ function ShopList() {
   }, [authToken])
 
   async function fetchShops() {
-    if (loadingRef.current) return
-    loadingRef.current = true
-
     try {
       setLoading(true)
       setError(null)
@@ -75,11 +73,13 @@ function ShopList() {
         headers['Authorization'] = `Bearer ${authToken}`
       }
 
-      // 直接用 sort=@random 取100条
-      const response = await fetch(
-        `/api/collections/customers/records?perPage=100&sort=@random`,
-        { headers }
-      )
+      let url = `/api/collections/customers/records?perPage=100&sort=@random`
+      if (tagFilter) {
+        const encodedFilter = encodeURIComponent(`tag="${tagFilter}"`)
+        url += `&filter=${encodedFilter}`
+      }
+
+      const response = await fetch(url, { headers })
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`)
@@ -87,14 +87,12 @@ function ShopList() {
 
       const data = await response.json()
       
-      // 后端已经随机了，直接用
       setShops(data.items)
       
       await fetchCheckRecords()
     } catch (err) {
       setError(err.message)
     } finally {
-      loadingRef.current = false
       setLoading(false)
     }
   }
