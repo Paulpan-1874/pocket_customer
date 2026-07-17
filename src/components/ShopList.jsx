@@ -47,6 +47,7 @@ function ShopList() {
   const [relatedShops, setRelatedShops] = useState({})
   const [loadingRelated, setLoadingRelated] = useState({})
   const [importTag, setImportTag] = useState('')
+  const [tagInput, setTagInput] = useState('')
   const [tagFilter, setTagFilter] = useState('')
 
   useEffect(() => {
@@ -70,7 +71,11 @@ function ShopList() {
         headers['Authorization'] = `Bearer ${authToken}`
       }
 
-      const url = `/api/collections/customers/records?perPage=100&sort=@random`
+      let url = `/api/collections/customers/records?perPage=100&sort=@random`
+      if (tagFilter) {
+        const encodedFilter = encodeURIComponent(`tag="${tagFilter}"`)
+        url += `&filter=${encodedFilter}`
+      }
 
       const response = await fetch(url, { headers })
 
@@ -646,16 +651,22 @@ function ShopList() {
             {!loading && !error && shops.length > 0 && (
               <div className="flex items-center gap-2 mb-4">
                 <Tag className="w-4 h-4 text-gray-400" strokeWidth={2} />
-                <select
-                  value={tagFilter}
-                  onChange={(e) => setTagFilter(e.target.value)}
-                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                <input
+                  type="text"
+                  value={tagInput}
+                  onChange={(e) => setTagInput(e.target.value)}
+                  placeholder="输入标签筛选"
+                  className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <button
+                  onClick={() => {
+                    setTagFilter(tagInput.trim())
+                    fetchShops()
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
                 >
-                  <option value="">全部标签</option>
-                  {[...new Set(shops.map(s => s.tag).filter(Boolean))].map(tag => (
-                    <option key={tag} value={tag}>{tag}</option>
-                  ))}
-                </select>
+                  确认
+                </button>
               </div>
             )}
             
