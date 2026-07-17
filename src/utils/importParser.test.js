@@ -267,6 +267,80 @@ describe('parseImportText', () => {
     const { errors } = parseImportText(text)
     expect(errors[0]).toContain('第2行')
   })
+
+  // P0: Windows 换行符兼容性
+  it('兼容 Windows 换行符 \\r\\n', () => {
+    const text = '店铺A,13812345678,地址A\r\n店铺B,13912345678,地址B'
+    const { records, errors } = parseImportText(text)
+    expect(records).toHaveLength(2)
+    expect(errors).toHaveLength(0)
+    // 关键：地址不能残留 \r 字符
+    expect(records[0].store_address).toBe('地址A')
+    expect(records[0].store_address).not.toContain('\r')
+    expect(records[1].store_address).toBe('地址B')
+    expect(records[1].store_address).not.toContain('\r')
+  })
+
+  it('兼容旧版 Mac 换行符 \\r', () => {
+    const text = '店铺A,13812345678,地址A\r店铺B,13912345678,地址B'
+    const { records } = parseImportText(text)
+    expect(records).toHaveLength(2)
+    expect(records[0].store_address).not.toContain('\r')
+  })
+
+  it('Windows 换行符与错误行混合时行号正确', () => {
+    const text = '店铺A,13812345678,地址A\r\n错误,12345,地址\r\n店铺C,15012345678,地址C'
+    const { records, errors } = parseImportText(text)
+    expect(records).toHaveLength(2)
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toBe('第2行: 电话号码格式不正确')
+  })
+
+  it('Windows 换行符末尾多余 \\r 不影响解析', () => {
+    const text = '店铺A,13812345678,地址A\r\n'
+    const { records } = parseImportText(text)
+    expect(records).toHaveLength(1)
+    expect(records[0].store_name).toBe('店铺A')
+  })
+
+  // P0: 全角空格分隔支持
+  it('单个全角空格可作为分隔符', () => {
+    const { record, error } = parseImportLine('荣记本草堂　13812345678　前进中路6号', 1)
+    expect(error).toBeNull()
+    expect(record.store_name).toBe('荣记本草堂')
+    expect(record.store_phone).toBe('13812345678')
+    expect(record.store_address).toBe('前进中路6号')
+  })
+
+  it('多个全角空格连续作为分隔符', () => {
+    const { record, error } = parseImportLine('荣记本草堂　　　13812345678　　　前进中路6号', 1)
+    expect(error).toBeNull()
+    expect(record.store_name).toBe('荣记本草堂')
+  })
+
+  it('全角空格分隔的整段文本可正确解析', () => {
+    const text = [
+      '店铺A　13812345678　地址A',
+      '店铺B　13912345678　地址B'
+    ].join('\n')
+    const { records, errors } = parseImportText(text)
+    expect(records).toHaveLength(2)
+    expect(errors).toHaveLength(0)
+  })
+
+  it('全角空格与半角空格混合分隔', () => {
+    const { record, error } = parseImportLine('店铺A　 13812345678 　地址A', 1)
+    expect(error).toBeNull()
+    expect(record.store_name).toBe('店铺A')
+    expect(record.store_phone).toBe('13812345678')
+  })
+
+  it('全角空格分隔的地址可包含多个部分（多部分用逗号重新拼接）', () => {
+    const { record, error } = parseImportLine('店铺A　13812345678　前进中路6号　首层105', 1)
+    expect(error).toBeNull()
+    // 与逗号分隔模式一致，多部分地址用逗号合并
+    expect(record.store_address).toBe('前进中路6号,首层105')
+  })
 })
 
 describe('formatImportResult', () => {

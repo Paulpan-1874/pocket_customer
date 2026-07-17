@@ -23,7 +23,8 @@ export function parseImportLine(line, lineNumber) {
   if (line.includes(',')) {
     parts = line.split(',')
   } else {
-    parts = line.split(/\s{2,}|\t+/).filter(p => p.trim())
+    // 支持 2+ 个半角空格、制表符、1+ 个全角空格作为分隔符
+    parts = line.split(/\s{2,}|\t+|　+/).filter(p => p.trim())
   }
 
   if (parts.length < 3) {
@@ -64,7 +65,8 @@ export function parseImportLine(line, lineNumber) {
 // 解析整段导入文本
 // 返回 { records, errors }
 export function parseImportText(text, importTag = '') {
-  const lines = text.trim().split('\n').filter(line => line.trim())
+  // 兼容 Windows 换行符 \r\n 和旧版 Mac \r
+  const lines = text.trim().split(/\r\n|\r|\n/).filter(line => line.trim())
   const records = []
   const errors = []
 
