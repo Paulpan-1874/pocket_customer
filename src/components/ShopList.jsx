@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Phone, Copy, Check, MapPin, Crown, Tag } from 'lucide-react'
+import { useAuth } from '../hooks/useAuth'
 
 function normalizePhone(phone) {
   if (!phone) return ''
@@ -25,6 +26,18 @@ function formatRelativeTime(dateStr) {
 }
 
 function ShopList() {
+  const {
+    authToken,
+    currentUser,
+    isLoggedIn,
+    loginForm,
+    loginError,
+    loginLoading,
+    setLoginForm,
+    handleLogin,
+    handleLogout
+  } = useAuth()
+
   const [shops, setShops] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -36,12 +49,6 @@ function ShopList() {
   const [checking, setChecking] = useState({})
   const [checkFeedback, setCheckFeedback] = useState({})
   const [copiedId, setCopiedId] = useState(null)
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [currentUser, setCurrentUser] = useState(null)
-  const [authToken, setAuthToken] = useState(localStorage.getItem('pb_auth_token') || '')
-  const [loginForm, setLoginForm] = useState({ email: '', password: '' })
-  const [loginError, setLoginError] = useState('')
-  const [loginLoading, setLoginLoading] = useState(false)
   const [bigCustomerPhones, setBigCustomerPhones] = useState({})
   const [expandedShops, setExpandedShops] = useState({})
   const [relatedShops, setRelatedShops] = useState({})
@@ -55,12 +62,6 @@ function ShopList() {
     fetchBigCustomerPhones()
   }, [])
 
-  useEffect(() => {
-    if (authToken) {
-      fetchUserInfo()
-    }
-  }, [authToken])
-
   async function fetchShops(tagFilterParam) {
     try {
       setLoading(true)
@@ -72,7 +73,6 @@ function ShopList() {
       }
 
       let url = `/api/collections/customers/records?perPage=100&sort=@random`
-      // 使用传入的参数，如果没有则使用 state 中的值
       const filterValue = tagFilterParam !== undefined ? tagFilterParam : tagFilter
       if (filterValue) {
         const encodedFilter = encodeURIComponent(`tag="${filterValue}"`)
@@ -191,76 +191,6 @@ function ShopList() {
       }
       return next
     })
-  }
-
-  async function fetchUserInfo() {
-    try {
-      const response = await fetch('/api/collections/users/records', {
-        headers: {
-          'Authorization': `Bearer ${authToken}`
-        }
-      })
-      if (!response.ok) {
-        throw new Error('Token invalid')
-      }
-      const data = await response.json()
-      if (data.items.length > 0) {
-        setCurrentUser(data.items[0])
-        setIsLoggedIn(true)
-      }
-    } catch (err) {
-      console.log('获取用户信息失败:', err)
-      setIsLoggedIn(false)
-      setCurrentUser(null)
-      localStorage.removeItem('pb_auth_token')
-      setAuthToken('')
-    }
-  }
-
-  async function handleLogin() {
-    if (!loginForm.email || !loginForm.password) {
-      setLoginError('请输入邮箱和密码')
-      return
-    }
-
-    setLoginLoading(true)
-    setLoginError('')
-
-    try {
-      const response = await fetch('/api/collections/users/auth-with-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          identity: loginForm.email,
-          password: loginForm.password
-        })
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: '登录失败' }))
-        throw new Error(errorData.message || '登录失败')
-      }
-
-      const data = await response.json()
-      setAuthToken(data.token)
-      localStorage.setItem('pb_auth_token', data.token)
-      setCurrentUser(data.record)
-      setIsLoggedIn(true)
-      setLoginForm({ email: '', password: '' })
-    } catch (err) {
-      setLoginError(err.message)
-    } finally {
-      setLoginLoading(false)
-    }
-  }
-
-  function handleLogout() {
-    setIsLoggedIn(false)
-    setCurrentUser(null)
-    setAuthToken('')
-    localStorage.removeItem('pb_auth_token')
   }
 
   async function handleCheck(shop, checkType) {
@@ -663,8 +593,8 @@ function ShopList() {
                 <button
                   onClick={() => {
                     const newFilter = tagInput.trim()
-                    setTagFilter(newFilter)  // 更新 state 用于 UI 显示
-                    fetchShops(newFilter)    // 直接传递最新值
+                    setTagFilter(newFilter)
+                    fetchShops(newFilter)
                   }}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
                 >
