@@ -75,7 +75,7 @@ function ShopList() {
       let url = `/api/collections/customers/records?perPage=100&sort=@random`
       const filterValue = tagFilterParam !== undefined ? tagFilterParam : tagFilter
       if (filterValue) {
-        const encodedFilter = encodeURIComponent(`tag="${filterValue}"`)
+        const encodedFilter = encodeURIComponent(`tag~"${filterValue}"`)
         url += `&filter=${encodedFilter}`
       }
 
@@ -636,7 +636,7 @@ function ShopList() {
             )}
             
             {!loading && !error && shops
-              .filter(shop => !tagFilter || shop.tag === tagFilter)
+              .filter(shop => !tagFilter || (shop.tag && shop.tag.includes(tagFilter)))
               .map((shop) => {
               const phoneKey = normalizePhone(shop.store_phone)
               const cidKey = 'cid:' + shop.id
