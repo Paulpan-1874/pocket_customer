@@ -1,11 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Phone, Copy, Check, MapPin, Crown, Tag } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
-
-function normalizePhone(phone) {
-  if (!phone) return ''
-  return String(phone).replace(/[\s\-]/g, '').replace(/^\+?86/, '')
-}
+import { normalizePhone, parseImportText } from '../utils/importParser'
 
 function formatRelativeTime(dateStr) {
   const date = new Date(dateStr)
@@ -296,56 +292,10 @@ function ShopList() {
       return
     }
 
-    const lines = importText.trim().split('\n').filter(line => line.trim())
-    const records = []
-    const validationErrors = []
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i]
-      const lineNum = i + 1
-      
-      let parts
-      if (line.includes(',')) {
-        parts = line.split(',')
-      } else {
-        parts = line.split(/\s{2,}|\t+/).filter(p => p.trim())
-      }
-      
-      if (parts.length < 3) {
-        validationErrors.push(`第${lineNum}行: 格式不正确，缺少必要字段`)
-        continue
-      }
-      
-      const store_name = parts[0].trim()
-      const store_phone = parts[1].trim()
-      const store_address = parts.slice(2).join(',').trim()
-      
-      if (!store_name) {
-        validationErrors.push(`第${lineNum}行: 店铺名称不能为空`)
-        continue
-      }
-      
-      if (!store_phone) {
-        validationErrors.push(`第${lineNum}行: 电话号码不能为空`)
-        continue
-      }
-      
-      const phoneRegex = /^(1[3-9]\d{9}|400\d{7}|400-\d{3}-\d{4}|0\d{2,3}-\d{7,8}|0\d{2,3}\d{7,8})$/
-      if (!phoneRegex.test(store_phone)) {
-        validationErrors.push(`第${lineNum}行: 电话号码格式不正确`)
-        continue
-      }
-      
-      if (!store_address) {
-        validationErrors.push(`第${lineNum}行: 地址不能为空`)
-        continue
-      }
-      
-      records.push({ store_name, store_phone: normalizePhone(store_phone), store_address, tag: importTag.trim() || '' })
-    }
+    const { records, errors: validationErrors } = parseImportText(importText, importTag)
 
     if (records.length === 0) {
-      const errorMsg = validationErrors.length > 0 
+      const errorMsg = validationErrors.length > 0
         ? `数据验证失败：\n${validationErrors.slice(0, 5).join('\n')}${validationErrors.length > 5 ? `\n...还有${validationErrors.length - 5}条错误` : ''}`
         : '未解析到有效数据，请检查格式'
       setImportResult({ success: false, message: errorMsg })
