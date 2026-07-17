@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Phone, Copy, Check, MapPin, Crown } from 'lucide-react'
+import { Phone, Copy, Check, MapPin, Crown, Tag } from 'lucide-react'
 
 function normalizePhone(phone) {
   if (!phone) return ''
@@ -46,6 +46,8 @@ function ShopList() {
   const [expandedShops, setExpandedShops] = useState({})
   const [relatedShops, setRelatedShops] = useState({})
   const [loadingRelated, setLoadingRelated] = useState({})
+  const [importTag, setImportTag] = useState('')
+  const [tagFilter, setTagFilter] = useState('')
 
   const loadingRef = useRef(false)
 
@@ -399,7 +401,7 @@ function ShopList() {
         continue
       }
       
-      records.push({ store_name, store_phone: normalizePhone(store_phone), store_address })
+      records.push({ store_name, store_phone: normalizePhone(store_phone), store_address, tag: importTag.trim() || '' })
     }
 
     if (records.length === 0) {
@@ -585,6 +587,16 @@ function ShopList() {
             {showImport && (
               <div className="bg-white rounded-xl shadow-sm p-4">
                 <h3 className="font-medium text-gray-800 mb-3">批量导入店铺</h3>
+                <div className="mb-3">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">标签（可选）</label>
+                  <input
+                    type="text"
+                    value={importTag}
+                    onChange={(e) => setImportTag(e.target.value)}
+                    placeholder="例如：新客户、VIP"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
                 <textarea
                   value={importText}
                   onChange={(e) => setImportText(e.target.value)}
@@ -639,7 +651,26 @@ function ShopList() {
               </div>
             )}
             
-            {!loading && !error && shops.map((shop) => {
+            {/* 标签筛选 */}
+            {!loading && !error && shops.length > 0 && (
+              <div className="flex items-center gap-2 mb-4">
+                <Tag className="w-4 h-4 text-gray-400" strokeWidth={2} />
+                <select
+                  value={tagFilter}
+                  onChange={(e) => setTagFilter(e.target.value)}
+                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                >
+                  <option value="">全部标签</option>
+                  {[...new Set(shops.map(s => s.tag).filter(Boolean))].map(tag => (
+                    <option key={tag} value={tag}>{tag}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            
+            {!loading && !error && shops
+              .filter(shop => !tagFilter || shop.tag === tagFilter)
+              .map((shop) => {
               const phoneKey = normalizePhone(shop.store_phone)
               const cidKey = 'cid:' + shop.id
               const mergedRecords = [
@@ -659,6 +690,12 @@ function ShopList() {
                   <div className="mb-3">
                     <div className="flex items-center justify-between gap-2 mb-2">
                       <h2 className="text-lg font-semibold text-gray-900 truncate">{shop.store_name}</h2>
+                      {shop.tag && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-purple-100 text-purple-700 whitespace-nowrap">
+                          <Tag className="w-3 h-3" strokeWidth={2} />
+                          {shop.tag}
+                        </span>
+                      )}
                       {isBig && (
                         <button
                           onClick={() => toggleExpandShop(shop)}
