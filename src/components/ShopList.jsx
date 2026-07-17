@@ -61,7 +61,7 @@ function ShopList() {
     }
   }, [authToken])
 
-  async function fetchShops() {
+  async function fetchShops(tagFilterParam) {
     try {
       setLoading(true)
       setError(null)
@@ -72,8 +72,10 @@ function ShopList() {
       }
 
       let url = `/api/collections/customers/records?perPage=100&sort=@random`
-      if (tagFilter) {
-        const encodedFilter = encodeURIComponent(`tag="${tagFilter}"`)
+      // 使用传入的参数，如果没有则使用 state 中的值
+      const filterValue = tagFilterParam !== undefined ? tagFilterParam : tagFilter
+      if (filterValue) {
+        const encodedFilter = encodeURIComponent(`tag="${filterValue}"`)
         url += `&filter=${encodedFilter}`
       }
 
@@ -660,8 +662,9 @@ function ShopList() {
                 />
                 <button
                   onClick={() => {
-                    setTagFilter(tagInput.trim())
-                    fetchShops()
+                    const newFilter = tagInput.trim()
+                    setTagFilter(newFilter)  // 更新 state 用于 UI 显示
+                    fetchShops(newFilter)    // 直接传递最新值
                   }}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
                 >
