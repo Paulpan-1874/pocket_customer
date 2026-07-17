@@ -50,12 +50,9 @@ function ShopList() {
   const [tagFilter, setTagFilter] = useState('')
 
   useEffect(() => {
+    fetchShops()
     fetchBigCustomerPhones()
   }, [])
-
-  useEffect(() => {
-    fetchShops()
-  }, [tagFilter])
 
   useEffect(() => {
     if (authToken) {
@@ -73,11 +70,7 @@ function ShopList() {
         headers['Authorization'] = `Bearer ${authToken}`
       }
 
-      let url = `/api/collections/customers/records?perPage=100&sort=@random`
-      if (tagFilter) {
-        const encodedFilter = encodeURIComponent(`tag="${tagFilter}"`)
-        url += `&filter=${encodedFilter}`
-      }
+      const url = `/api/collections/customers/records?perPage=100&sort=@random`
 
       const response = await fetch(url, { headers })
 
