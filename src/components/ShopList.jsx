@@ -56,13 +56,15 @@ function ShopList() {
   const [importTag, setImportTag] = useState('')
   const [tagInput, setTagInput] = useState('')
   const [tagFilter, setTagFilter] = useState('')
+  const [phoneInput, setPhoneInput] = useState('')
+  const [phoneFilter, setPhoneFilter] = useState('')
 
   useEffect(() => {
     fetchShops()
     fetchBigCustomerPhones()
   }, [])
 
-  async function fetchShops(tagFilterParam) {
+  async function fetchShops({ tag: tagFilterParam, phone: phoneFilterParam } = {}) {
     try {
       setLoading(true)
       setError(null)
@@ -73,9 +75,19 @@ function ShopList() {
       }
 
       let url = `/api/collections/customers/records?perPage=100&sort=@random`
-      const filterValue = tagFilterParam !== undefined ? tagFilterParam : tagFilter
-      if (filterValue) {
-        const encodedFilter = encodeURIComponent(`tag~"${filterValue}"`)
+      const tagValue = tagFilterParam !== undefined ? tagFilterParam : tagFilter
+      const phoneValue = phoneFilterParam !== undefined ? phoneFilterParam : phoneFilter
+      
+      const filters = []
+      if (tagValue) {
+        filters.push(`tag~"${tagValue}"`)
+      }
+      if (phoneValue) {
+        filters.push(`store_phone~"${phoneValue}"`)
+      }
+      
+      if (filters.length > 0) {
+        const encodedFilter = encodeURIComponent(filters.join(' && '))
         url += `&filter=${encodedFilter}`
       }
 
@@ -398,7 +410,7 @@ function ShopList() {
           message: `部分导入成功：成功 ${successCount} 条，失败 ${failCount} 条\n${errorDetails}${errors.length > 3 ? `\n...还有${errors.length - 3}条错误` : ''}`
         })
       }
-      await fetchShops(tagFilter)
+      await fetchShops({ tag: tagFilter, phone: phoneFilter })
     } catch (err) {
       setImportResult({ success: false, message: `导入失败：${err.message}` })
     } finally {
@@ -472,9 +484,11 @@ function ShopList() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => {
-                      const currentFilter = tagInput.trim() || tagFilter
-                      setTagFilter(currentFilter)
-                      fetchShops(currentFilter)
+                      const currentTagFilter = tagInput.trim() || tagFilter
+                      const currentPhoneFilter = phoneInput.trim() || phoneFilter
+                      setTagFilter(currentTagFilter)
+                      setPhoneFilter(currentPhoneFilter)
+                      fetchShops({ tag: currentTagFilter, phone: currentPhoneFilter })
                     }}
                     className="flex items-center gap-1 text-blue-600 text-sm font-medium hover:text-blue-700"
                     title="换一批"
@@ -586,18 +600,56 @@ function ShopList() {
             {/* 标签筛选 */}
             {!error && (
               <div className="flex flex-col gap-2 mb-4">
-                {tagFilter && (
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-xs font-medium">
-                      <Tag className="w-3 h-3" strokeWidth={2} />
-                      当前筛选：{tagFilter}
-                    </span>
+                {(tagFilter || phoneFilter) && (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {tagFilter && (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-xs font-medium">
+                        <Tag className="w-3 h-3" strokeWidth={2} />
+                        标签：{tagFilter}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTagInput('')
+                            setTagFilter('')
+                            fetchShops({ tag: '', phone: phoneFilter })
+                          }}
+                          disabled={loading}
+                          className="ml-1 w-3.5 h-3.5 flex items-center justify-center text-blue-400 hover:text-blue-600 rounded-full hover:bg-blue-100 transition-colors"
+                        >
+                          <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </span>
+                    )}
+                    {phoneFilter && (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-50 text-green-600 rounded-full text-xs font-medium">
+                        <Phone className="w-3 h-3" strokeWidth={2} />
+                        电话：{phoneFilter}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPhoneInput('')
+                            setPhoneFilter('')
+                            fetchShops({ tag: tagFilter, phone: '' })
+                          }}
+                          disabled={loading}
+                          className="ml-1 w-3.5 h-3.5 flex items-center justify-center text-green-400 hover:text-green-600 rounded-full hover:bg-green-100 transition-colors"
+                        >
+                          <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </span>
+                    )}
                     <button
                       type="button"
                       onClick={() => {
                         setTagInput('')
                         setTagFilter('')
-                        fetchShops('')
+                        setPhoneInput('')
+                        setPhoneFilter('')
+                        fetchShops({ tag: '', phone: '' })
                       }}
                       disabled={loading}
                       className="flex items-center gap-1 px-3 py-1 text-red-500 text-xs font-medium hover:text-red-600 hover:bg-red-50 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -605,7 +657,7 @@ function ShopList() {
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                       </svg>
-                      清除筛选
+                      清除全部筛选
                     </button>
                   </div>
                 )}
@@ -624,10 +676,33 @@ function ShopList() {
                     onClick={() => {
                       const newFilter = tagInput.trim()
                       setTagFilter(newFilter)
-                      fetchShops(newFilter)
+                      fetchShops({ tag: newFilter, phone: phoneFilter })
                     }}
                     disabled={loading}
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    确认
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Phone className="w-4 h-4 text-gray-400" strokeWidth={2} />
+                  <input
+                    type="tel"
+                    value={phoneInput}
+                    onChange={(e) => setPhoneInput(e.target.value)}
+                    placeholder="输入电话号码筛选"
+                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    disabled={loading}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newFilter = phoneInput.trim()
+                      setPhoneFilter(newFilter)
+                      fetchShops({ tag: tagFilter, phone: newFilter })
+                    }}
+                    disabled={loading}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     确认
                   </button>
@@ -636,7 +711,10 @@ function ShopList() {
             )}
             
             {!loading && !error && shops
-              .filter(shop => !tagFilter || (shop.tag && shop.tag.includes(tagFilter)))
+              .filter(shop => 
+                (!tagFilter || (shop.tag && shop.tag.includes(tagFilter))) &&
+                (!phoneFilter || (shop.store_phone && shop.store_phone.includes(phoneFilter)))
+              )
               .map((shop) => {
               const phoneKey = normalizePhone(shop.store_phone)
               const cidKey = 'cid:' + shop.id
