@@ -398,7 +398,7 @@ function ShopList() {
           message: `部分导入成功：成功 ${successCount} 条，失败 ${failCount} 条\n${errorDetails}${errors.length > 3 ? `\n...还有${errors.length - 3}条错误` : ''}`
         })
       }
-      await fetchShops()
+      await fetchShops(tagFilter)
     } catch (err) {
       setImportResult({ success: false, message: `导入失败：${err.message}` })
     } finally {
@@ -471,7 +471,11 @@ function ShopList() {
                 </div>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => fetchShops()}
+                    onClick={() => {
+                      const currentFilter = tagInput.trim() || tagFilter
+                      setTagFilter(currentFilter)
+                      fetchShops(currentFilter)
+                    }}
                     className="flex items-center gap-1 text-blue-600 text-sm font-medium hover:text-blue-700"
                     title="换一批"
                   >
@@ -580,26 +584,54 @@ function ShopList() {
             )}
             
             {/* 标签筛选 */}
-            {!loading && !error && shops.length > 0 && (
-              <div className="flex items-center gap-2 mb-4">
-                <Tag className="w-4 h-4 text-gray-400" strokeWidth={2} />
-                <input
-                  type="text"
-                  value={tagInput}
-                  onChange={(e) => setTagInput(e.target.value)}
-                  placeholder="输入标签筛选"
-                  className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                <button
-                  onClick={() => {
-                    const newFilter = tagInput.trim()
-                    setTagFilter(newFilter)
-                    fetchShops(newFilter)
-                  }}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-                >
-                  确认
-                </button>
+            {!error && (
+              <div className="flex flex-col gap-2 mb-4">
+                {tagFilter && (
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-xs font-medium">
+                      <Tag className="w-3 h-3" strokeWidth={2} />
+                      当前筛选：{tagFilter}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTagInput('')
+                        setTagFilter('')
+                        fetchShops('')
+                      }}
+                      disabled={loading}
+                      className="flex items-center gap-1 px-3 py-1 text-red-500 text-xs font-medium hover:text-red-600 hover:bg-red-50 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      清除筛选
+                    </button>
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <Tag className="w-4 h-4 text-gray-400" strokeWidth={2} />
+                  <input
+                    type="text"
+                    value={tagInput}
+                    onChange={(e) => setTagInput(e.target.value)}
+                    placeholder="输入标签筛选"
+                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    disabled={loading}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newFilter = tagInput.trim()
+                      setTagFilter(newFilter)
+                      fetchShops(newFilter)
+                    }}
+                    disabled={loading}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    确认
+                  </button>
+                </div>
               </div>
             )}
             
