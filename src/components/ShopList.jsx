@@ -3,6 +3,7 @@ import { Phone, Copy, Check, MapPin, Crown, Tag } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { normalizePhone, parseImportText } from '../utils/importParser'
 import { formatRelativeTime } from '../utils/timeFormatter'
+import { buildCheckRecordBody, mapCheckRecord, queryCheckRecordsByPhone } from '../utils/checkRecordKey'
 
 function ShopList() {
   const {
@@ -101,22 +102,13 @@ function ShopList() {
       const data = await response.json()
       const recordsByPhone = {}
       data.items.forEach(record => {
-        const relationData = record.expand?.relation
-        const operatorName = relationData?.name || relationData?.username || relationData?.email || record.relation
-        const mappedRecord = {
-          id: record.id,
-          customer_id: record.customer_id,
-          store_name: record.store_name || '',
-          check_type: record.select,
-          operator: operatorName,
-          check_time: record.created
+        const mappedRecord = mapCheckRecord(record)
+        const p = normalizePhone(mappedRecord.store_phone)
+        if (!p) return
+        if (!recordsByPhone[p]) {
+          recordsByPhone[p] = []
         }
-        const p = normalizePhone(record.store_phone)
-        const key = p ? p : ('cid:' + record.customer_id)
-        if (!recordsByPhone[key]) {
-          recordsByPhone[key] = []
-        }
-        recordsByPhone[key].push(mappedRecord)
+        recordsByPhone[p].push(mappedRecord)
       })
       setCheckRecords(recordsByPhone)
     } catch (err) {
@@ -200,13 +192,7 @@ function ShopList() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${authToken}`
         },
-        body: JSON.stringify({
-          customer_id: shop.id,
-          select: checkType,
-          relation: currentUser?.id || currentUser?.name || currentUser?.username || currentUser?.email || '未知用户',
-          store_phone: normalizePhone(shop.store_phone),
-          store_name: shop.store_name
-        })
+        body: JSON.stringify(buildCheckRecordBody(shop, checkType, currentUser))
       })
 
       if (!response.ok) {
@@ -255,13 +241,7 @@ function ShopList() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${authToken}`
         },
-        body: JSON.stringify({
-          customer_id: shop.id,
-          select: 'copy',
-          relation: currentUser?.id || currentUser?.name || currentUser?.username || currentUser?.email || '未知用户',
-          store_phone: normalizePhone(shop.store_phone),
-          store_name: shop.store_name
-        })
+        body: JSON.stringify(buildCheckRecordBody(shop, 'copy', currentUser))
       })
       await fetchCheckRecords()
     } catch (err) {
@@ -650,12 +630,7 @@ function ShopList() {
               )
               .map((shop) => {
               const phoneKey = normalizePhone(shop.store_phone)
-              const cidKey = 'cid:' + shop.id
-              const mergedRecords = [
-                ...(phoneKey ? (checkRecords[phoneKey] || []) : []),
-                ...(checkRecords[cidKey] || [])
-              ]
-              const sortedRecords = [...mergedRecords].sort((a, b) => new Date(b.check_time) - new Date(a.check_time))
+              const sortedRecords = [...queryCheckRecordsByPhone(checkRecords, phoneKey)].sort((a, b) => new Date(b.check_time) - new Date(a.check_time))
               const isBig = phoneKey && !!bigCustomerPhones[phoneKey]
               const bigCount = isBig ? bigCustomerPhones[phoneKey] : 0
               const feedback = checkFeedback[shop.id]
