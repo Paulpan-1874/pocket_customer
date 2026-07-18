@@ -274,37 +274,54 @@ function ShopList() {
       setImporting(true)
       setImportResult(null)
 
+      const BATCH_SIZE = 50
       let successCount = 0
       let failCount = 0
       const errors = []
 
-      for (let i = 0; i < records.length; i++) {
-        const record = records[i]
-        try {
-          const headers = {
-            'Content-Type': 'application/json'
-          }
-          if (authToken) {
-            headers['Authorization'] = `Bearer ${authToken}`
-          }
-          const response = await fetch('/api/collections/customers/records', {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(record)
-          })
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ message: response.statusText }))
-            throw new Error(errorData.message || `HTTP ${response.status}`)
-          }
-          successCount++
-        } catch (err) {
-          failCount++
-          errors.push({
-            line: i + 1,
-            name: record.store_name,
-            message: err.message
-          })
+      const headers = {
+        'Content-Type': 'application/json'
+      }
+      if (authToken) {
+        headers['Authorization'] = `Bearer ${authToken}`
+      }
+
+      for (let batchStart = 0; batchStart < records.length; batchStart += BATCH_SIZE) {
+        const batchRecords = records.slice(batchStart, batchStart + BATCH_SIZE)
+
+        const requests = batchRecords.map(record => ({
+          method: 'POST',
+          url: '/api/collections/customers/records',
+          body: record
+        }))
+
+        const response = await fetch('/api/batch', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ requests })
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ message: response.statusText }))
+          throw new Error(errorData.message || `HTTP ${response.status}`)
         }
+
+        const results = await response.json()
+
+        results.forEach((result, index) => {
+          const originalIndex = batchStart + index
+          const record = records[originalIndex]
+          if (result.success) {
+            successCount++
+          } else {
+            failCount++
+            errors.push({
+              line: originalIndex + 1,
+              name: record.store_name,
+              message: result.message || '导入失败'
+            })
+          }
+        })
       }
 
       if (failCount === 0) {
