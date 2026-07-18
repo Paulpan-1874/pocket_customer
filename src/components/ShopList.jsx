@@ -317,14 +317,14 @@ function ShopList() {
           batchResults.forEach((result, index) => {
             const originalIndex = batchStart + index
             const record = records[originalIndex]
-            if (result.success) {
+            if (result.code === 200 || result.code === 201) {
               successCount++
             } else {
               failCount++
               errors.push({
                 line: originalIndex + 1,
                 name: record.store_name,
-                message: result.message || '导入失败'
+                message: result.message || `HTTP ${result.code}` || '导入失败'
               })
             }
           })
