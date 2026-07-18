@@ -274,7 +274,7 @@ function ShopList() {
       setImporting(true)
       setImportResult(null)
 
-      const BATCH_SIZE = 50
+      const BATCH_SIZE = 10
       let successCount = 0
       let failCount = 0
       const errors = []
@@ -295,33 +295,64 @@ function ShopList() {
           body: record
         }))
 
-        const response = await fetch('/api/batch', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ requests })
-        })
+        let batchResults
+        try {
+          const response = await fetch('/api/batch', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ requests })
+          })
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ message: response.statusText }))
-          throw new Error(errorData.message || `HTTP ${response.status}`)
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ message: response.statusText }))
+            throw new Error(errorData.message || `HTTP ${response.status}`)
+          }
+
+          batchResults = await response.json()
+        } catch (batchErr) {
+          batchResults = null
         }
 
-        const results = await response.json()
-
-        results.forEach((result, index) => {
-          const originalIndex = batchStart + index
-          const record = records[originalIndex]
-          if (result.success) {
-            successCount++
-          } else {
-            failCount++
-            errors.push({
-              line: originalIndex + 1,
-              name: record.store_name,
-              message: result.message || '导入失败'
-            })
+        if (batchResults) {
+          batchResults.forEach((result, index) => {
+            const originalIndex = batchStart + index
+            const record = records[originalIndex]
+            if (result.success) {
+              successCount++
+            } else {
+              failCount++
+              errors.push({
+                line: originalIndex + 1,
+                name: record.store_name,
+                message: result.message || '导入失败'
+              })
+            }
+          })
+        } else {
+          for (let i = 0; i < batchRecords.length; i++) {
+            const originalIndex = batchStart + i
+            const record = records[originalIndex]
+            try {
+              const response = await fetch('/api/collections/customers/records', {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(record)
+              })
+              if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ message: response.statusText }))
+                throw new Error(errorData.message || `HTTP ${response.status}`)
+              }
+              successCount++
+            } catch (err) {
+              failCount++
+              errors.push({
+                line: originalIndex + 1,
+                name: record.store_name,
+                message: err.message
+              })
+            }
           }
-        })
+        }
       }
 
       if (failCount === 0) {
