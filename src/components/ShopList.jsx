@@ -200,7 +200,19 @@ function ShopList() {
         throw new Error(errorData.message || `HTTP ${response.status}`)
       }
 
-      await fetchCheckRecords()
+      const newRecord = await response.json()
+      const mappedRecord = mapCheckRecord(newRecord)
+      const phoneKey = normalizePhone(mappedRecord.store_phone)
+      if (phoneKey) {
+        setCheckRecords(prev => {
+          const next = { ...prev }
+          if (!next[phoneKey]) {
+            next[phoneKey] = []
+          }
+          next[phoneKey].push(mappedRecord)
+          return next
+        })
+      }
     } catch (err) {
       setCheckFeedback(prev => ({ ...prev, [shop.id]: { success: false, message: `保存失败：${err.message}` } }))
     } finally {
@@ -235,7 +247,7 @@ function ShopList() {
     if (!isLoggedIn) return
 
     try {
-      await fetch('/api/collections/check_records/records', {
+      const response = await fetch('/api/collections/check_records/records', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -243,7 +255,22 @@ function ShopList() {
         },
         body: JSON.stringify(buildCheckRecordBody(shop, 'copy', currentUser))
       })
-      await fetchCheckRecords()
+
+      if (response.ok) {
+        const newRecord = await response.json()
+        const mappedRecord = mapCheckRecord(newRecord)
+        const phoneKey = normalizePhone(mappedRecord.store_phone)
+        if (phoneKey) {
+          setCheckRecords(prev => {
+            const next = { ...prev }
+            if (!next[phoneKey]) {
+              next[phoneKey] = []
+            }
+            next[phoneKey].push(mappedRecord)
+            return next
+          })
+        }
+      }
     } catch (err) {
       console.log('保存复制记录失败:', err)
     }
