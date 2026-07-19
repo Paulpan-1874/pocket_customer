@@ -26,10 +26,12 @@ export function buildCheckRecordBody(shop, checkType, currentUser) {
 }
 
 // 映射后端返回的检查记录（兼容新旧格式）
-export function mapCheckRecord(record) {
+export function mapCheckRecord(record, currentUser) {
   const relationData = record.expand?.relation
-  const operatorName = relationData?.name || relationData?.username || relationData?.email || record.relation
-  
+  const operatorName = relationData?.name || relationData?.username || relationData?.email
+    || (currentUser && (currentUser.name || currentUser.username || currentUser.email))
+    || record.relation
+
   return {
     id: record.id,
     store_phone: record.store_phone || '',

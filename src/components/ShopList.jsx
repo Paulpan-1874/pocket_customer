@@ -201,7 +201,7 @@ function ShopList() {
       }
 
       const newRecord = await response.json()
-      const mappedRecord = mapCheckRecord(newRecord)
+      const mappedRecord = mapCheckRecord(newRecord, currentUser)
       const phoneKey = normalizePhone(mappedRecord.store_phone)
       if (phoneKey) {
         setCheckRecords(prev => {
@@ -258,7 +258,7 @@ function ShopList() {
 
       if (response.ok) {
         const newRecord = await response.json()
-        const mappedRecord = mapCheckRecord(newRecord)
+        const mappedRecord = mapCheckRecord(newRecord, currentUser)
         const phoneKey = normalizePhone(mappedRecord.store_phone)
         if (phoneKey) {
           setCheckRecords(prev => {
