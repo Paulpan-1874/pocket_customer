@@ -107,7 +107,7 @@ describe('mapCheckRecord', () => {
     expect(mapped.operator).toBe('user_2')
   })
 
-  it('映射不含 expand 但提供 currentUser 的记录，使用用户名', () => {
+  it('映射不含 expand 但提供 currentUser 且 relation 匹配时，使用用户名', () => {
     const record = {
       id: 'record_3',
       store_phone: '13812345678',
@@ -120,6 +120,21 @@ describe('mapCheckRecord', () => {
 
     const mapped = mapCheckRecord(record, currentUser)
     expect(mapped.operator).toBe('李四')
+  })
+
+  it('映射不含 expand 但提供 currentUser 且 relation 不匹配时，使用 relation 值', () => {
+    const record = {
+      id: 'record_4',
+      store_phone: '13812345678',
+      store_name: '店铺D',
+      select: 'pass',
+      created: '2026-07-18T10:00:00Z',
+      relation: 'other_user'
+    }
+    const currentUser = { id: 'user_99', name: '李四', email: 'lisi@example.com' }
+
+    const mapped = mapCheckRecord(record, currentUser)
+    expect(mapped.operator).toBe('other_user')
   })
 
   it('映射旧格式记录（不含 store_phone）', () => {

@@ -28,9 +28,17 @@ export function buildCheckRecordBody(shop, checkType, currentUser) {
 // 映射后端返回的检查记录（兼容新旧格式）
 export function mapCheckRecord(record, currentUser) {
   const relationData = record.expand?.relation
-  const operatorName = relationData?.name || relationData?.username || relationData?.email
-    || (currentUser && (currentUser.name || currentUser.username || currentUser.email))
-    || record.relation
+  let operatorName = relationData?.name || relationData?.username || relationData?.email
+  
+  if (!operatorName) {
+    if (currentUser && record.relation === currentUser.id) {
+      operatorName = currentUser.name || currentUser.username || currentUser.email
+    }
+  }
+  
+  if (!operatorName) {
+    operatorName = record.relation
+  }
 
   return {
     id: record.id,
