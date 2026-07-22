@@ -44,6 +44,10 @@ function ShopList() {
     fetchBigCustomerPhones()
   }, [])
 
+  useEffect(() => {
+    fetchCheckRecords()
+  }, [authToken])
+
   async function fetchShops({ tag: tagFilterParam, phone: phoneFilterParam } = {}) {
     try {
       setLoading(true)
@@ -80,8 +84,6 @@ function ShopList() {
       const data = await response.json()
       
       setShops(data.items)
-      
-      await fetchCheckRecords()
     } catch (err) {
       setError(err.message)
     } finally {
