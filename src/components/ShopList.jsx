@@ -45,8 +45,10 @@ function ShopList() {
   }, [])
 
   useEffect(() => {
-    fetchCheckRecords()
-  }, [authToken])
+    if (isLoggedIn) {
+      fetchCheckRecords()
+    }
+  }, [isLoggedIn])
 
   async function fetchShops({ tag: tagFilterParam, phone: phoneFilterParam } = {}) {
     try {
@@ -84,6 +86,7 @@ function ShopList() {
       const data = await response.json()
       
       setShops(data.items)
+      await fetchCheckRecordsForShops(data.items)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -92,19 +95,73 @@ function ShopList() {
   }
 
   async function fetchCheckRecords() {
+    if (!isLoggedIn) return
+    
     try {
       const headers = {}
       if (authToken) {
         headers['Authorization'] = `Bearer ${authToken}`
       }
-      const response = await fetch('/api/collections/check_records/records?page=1&perPage=200&expand=relation', { headers })
+      
+      const recordsByPhone = {}
+      let page = 1, totalPages = 1
+      
+      while (page <= totalPages) {
+        const response = await fetch(`/api/collections/check_records/records?page=${page}&perPage=200&expand=relation`, { headers })
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`)
+        }
+        
+        const data = await response.json()
+        totalPages = data.totalPages || 1
+        
+        data.items.forEach(record => {
+          const mappedRecord = mapCheckRecord(record, currentUser)
+          const p = normalizePhone(mappedRecord.store_phone)
+          if (!p) return
+          if (!recordsByPhone[p]) {
+            recordsByPhone[p] = []
+          }
+          recordsByPhone[p].push(mappedRecord)
+        })
+        
+        page++
+      }
+      
+      setCheckRecords(recordsByPhone)
+    } catch (err) {
+      console.log('获取检查记录失败:', err)
+    }
+  }
+
+  async function fetchCheckRecordsForShops(shops) {
+    if (!shops || shops.length === 0 || !authToken) {
+      setCheckRecords({})
+      return
+    }
+    
+    try {
+      const phoneNumbers = [...new Set(shops.map(shop => normalizePhone(shop.store_phone)).filter(Boolean))]
+      if (phoneNumbers.length === 0) {
+        setCheckRecords({})
+        return
+      }
+      
+      const filter = phoneNumbers.map(p => `store_phone="${p}"`).join(' || ')
+      const response = await fetch(
+        `/api/collections/check_records/records?filter=${encodeURIComponent(filter)}&expand=relation`,
+        { headers: { 'Authorization': `Bearer ${authToken}` } }
+      )
+      
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`)
       }
+      
       const data = await response.json()
       const recordsByPhone = {}
+      
       data.items.forEach(record => {
-        const mappedRecord = mapCheckRecord(record)
+        const mappedRecord = mapCheckRecord(record, currentUser)
         const p = normalizePhone(mappedRecord.store_phone)
         if (!p) return
         if (!recordsByPhone[p]) {
@@ -112,9 +169,11 @@ function ShopList() {
         }
         recordsByPhone[p].push(mappedRecord)
       })
+      
       setCheckRecords(recordsByPhone)
     } catch (err) {
       console.log('获取检查记录失败:', err)
+      setCheckRecords({})
     }
   }
 
