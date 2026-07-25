@@ -148,27 +148,34 @@ function ShopList() {
       }
       
       const filter = phoneNumbers.map(p => `store_phone="${p}"`).join(' || ')
-      const response = await fetch(
-        `/api/collections/check_records/records?filter=${encodeURIComponent(filter)}&expand=relation`,
-        { headers: { 'Authorization': `Bearer ${authToken}` } }
-      )
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
-      
-      const data = await response.json()
       const recordsByPhone = {}
+      let page = 1, totalPages = 1
       
-      data.items.forEach(record => {
-        const mappedRecord = mapCheckRecord(record, currentUser)
-        const p = normalizePhone(mappedRecord.store_phone)
-        if (!p) return
-        if (!recordsByPhone[p]) {
-          recordsByPhone[p] = []
+      while (page <= totalPages) {
+        const response = await fetch(
+          `/api/collections/check_records/records?filter=${encodeURIComponent(filter)}&expand=relation&page=${page}&perPage=200`,
+          { headers: { 'Authorization': `Bearer ${authToken}` } }
+        )
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`)
         }
-        recordsByPhone[p].push(mappedRecord)
-      })
+        
+        const data = await response.json()
+        totalPages = data.totalPages || 1
+        
+        data.items.forEach(record => {
+          const mappedRecord = mapCheckRecord(record, currentUser)
+          const p = normalizePhone(mappedRecord.store_phone)
+          if (!p) return
+          if (!recordsByPhone[p]) {
+            recordsByPhone[p] = []
+          }
+          recordsByPhone[p].push(mappedRecord)
+        })
+        
+        page++
+      }
       
       setCheckRecords(recordsByPhone)
     } catch (err) {
