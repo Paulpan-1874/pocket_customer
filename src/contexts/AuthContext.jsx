@@ -1,50 +1,17 @@
-import { createContext, useState, useEffect, useCallback, useRef } from 'react'
+import { createContext, useState, useCallback } from 'react'
 
 export const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   const [authToken, setAuthToken] = useState(() => localStorage.getItem('pb_auth_token') || '')
-  const [currentUser, setCurrentUser] = useState(null)
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [currentUser, setCurrentUser] = useState(() => {
+    const saved = localStorage.getItem('pb_current_user')
+    return saved ? JSON.parse(saved) : null
+  })
+  const [isLoggedIn, setIsLoggedIn] = useState(() => !!localStorage.getItem('pb_auth_token'))
   const [loginForm, setLoginForm] = useState({ email: '', password: '' })
   const [loginError, setLoginError] = useState('')
   const [loginLoading, setLoginLoading] = useState(false)
-  const tokenVersionRef = useRef(0)
-
-  useEffect(() => {
-    if (authToken) {
-      fetchUserInfo()
-    } else {
-      setIsLoggedIn(false)
-      setCurrentUser(null)
-    }
-  }, [authToken])
-
-  async function fetchUserInfo() {
-    const currentVersion = tokenVersionRef.current
-    try {
-      const response = await fetch('/api/collections/users/auth-refresh', {
-        headers: {
-          'Authorization': `Bearer ${authToken}`
-        }
-      })
-      if (!response.ok) {
-        throw new Error('Token invalid')
-      }
-      const data = await response.json()
-      // 如果在请求期间 token 版本已变化（切换了账号），丢弃本次结果
-      if (tokenVersionRef.current !== currentVersion) return
-      setCurrentUser(data.record)
-      setIsLoggedIn(true)
-    } catch (err) {
-      if (tokenVersionRef.current !== currentVersion) return
-      console.log('获取用户信息失败:', err)
-      setIsLoggedIn(false)
-      setCurrentUser(null)
-      localStorage.removeItem('pb_auth_token')
-      setAuthToken('')
-    }
-  }
 
   const handleLogin = useCallback(async () => {
     if (!loginForm.email || !loginForm.password) {
@@ -73,9 +40,9 @@ export function AuthProvider({ children }) {
       }
 
       const data = await response.json()
-      tokenVersionRef.current++
       setAuthToken(data.token)
       localStorage.setItem('pb_auth_token', data.token)
+      localStorage.setItem('pb_current_user', JSON.stringify(data.record))
       setCurrentUser(data.record)
       setIsLoggedIn(true)
       setLoginForm({ email: '', password: '' })
@@ -87,11 +54,11 @@ export function AuthProvider({ children }) {
   }, [loginForm.email, loginForm.password])
 
   const handleLogout = useCallback(() => {
-    tokenVersionRef.current++
     setIsLoggedIn(false)
     setCurrentUser(null)
     setAuthToken('')
     localStorage.removeItem('pb_auth_token')
+    localStorage.removeItem('pb_current_user')
   }, [])
 
   const value = {
