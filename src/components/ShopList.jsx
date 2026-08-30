@@ -42,7 +42,9 @@ function ShopList() {
 
   useEffect(() => {
     fetchShops()
-    fetchBigCustomerPhones()
+    // 大客户列表延迟加载，不阻塞首屏
+    const timer = setTimeout(fetchBigCustomerPhones, 100)
+    return () => clearTimeout(timer)
   }, [])
 
   // 通用：获取并处理检查记录
