@@ -3,7 +3,7 @@ import { Phone, Copy, Check, MapPin, Crown, Tag } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { normalizePhone, parseImportText } from '../utils/importParser'
 import { formatRelativeTime } from '../utils/timeFormatter'
-import { buildCheckRecordBody, mapCheckRecord, queryCheckRecordsByPhone } from '../utils/checkRecordKey'
+import { buildCheckRecordBody, queryCheckRecordsByPhone } from '../utils/checkRecordKey'
 
 function ShopList() {
   const {
@@ -245,51 +245,63 @@ function ShopList() {
     })
   }
 
-  async function handleCheck(shop, checkType) {
+  // 通用：创建检查记录并更新 state
+  async function createCheckRecord(shop, checkType) {
     if (!isLoggedIn) {
       setCheckFeedback(prev => ({ ...prev, [shop.id]: { success: false, message: '请先登录' } }))
-      return
+      return null
     }
-
-    setChecking(prev => ({ ...prev, [shop.id]: true }))
-    setCheckFeedback(prev => ({ ...prev, [shop.id]: null }))
 
     try {
       const response = await fetch('/api/collections/check_records/records', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`
+          'Authorization': 'Bearer ' + authToken
         },
         body: JSON.stringify(buildCheckRecordBody(shop, checkType, currentUser))
       })
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: response.statusText }))
-        throw new Error(errorData.message || `HTTP ${response.status}`)
+        throw new Error(errorData.message || 'HTTP ' + response.status)
       }
 
       const newRecord = await response.json()
-      const mappedRecord = mapCheckRecord(newRecord, currentUser)
+      const mappedRecord = {
+        id: newRecord.id,
+        store_phone: newRecord.store_phone || '',
+        store_name: newRecord.store_name || '',
+        check_type: newRecord.select,
+        operator: resolveOperatorName(newRecord, userMapRef.current),
+        check_time: newRecord.created
+      }
       const phoneKey = normalizePhone(mappedRecord.store_phone)
       if (phoneKey) {
         setCheckRecords(prev => {
           const next = { ...prev }
-          if (!next[phoneKey]) {
-            next[phoneKey] = []
-          }
+          if (!next[phoneKey]) next[phoneKey] = []
           next[phoneKey].push(mappedRecord)
           return next
         })
       }
+      return mappedRecord
     } catch (err) {
-      setCheckFeedback(prev => ({ ...prev, [shop.id]: { success: false, message: `保存失败：${err.message}` } }))
-    } finally {
-      setChecking(prev => ({ ...prev, [shop.id]: false }))
-      setTimeout(() => {
-        setCheckFeedback(prev => ({ ...prev, [shop.id]: null }))
-      }, 3000)
+      setCheckFeedback(prev => ({ ...prev, [shop.id]: { success: false, message: '保存失败：' + err.message } }))
+      return null
     }
+  }
+
+  async function handleCheck(shop, checkType) {
+    setChecking(prev => ({ ...prev, [shop.id]: true }))
+    setCheckFeedback(prev => ({ ...prev, [shop.id]: null }))
+
+    await createCheckRecord(shop, checkType)
+
+    setChecking(prev => ({ ...prev, [shop.id]: false }))
+    setTimeout(() => {
+      setCheckFeedback(prev => ({ ...prev, [shop.id]: null }))
+    }, 3000)
   }
 
   async function handleCopyPhone(shop) {
@@ -313,35 +325,8 @@ function ShopList() {
       return
     }
 
-    if (!isLoggedIn) return
-
-    try {
-      const response = await fetch('/api/collections/check_records/records', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`
-        },
-        body: JSON.stringify(buildCheckRecordBody(shop, 'copy', currentUser))
-      })
-
-      if (response.ok) {
-        const newRecord = await response.json()
-        const mappedRecord = mapCheckRecord(newRecord, currentUser)
-        const phoneKey = normalizePhone(mappedRecord.store_phone)
-        if (phoneKey) {
-          setCheckRecords(prev => {
-            const next = { ...prev }
-            if (!next[phoneKey]) {
-              next[phoneKey] = []
-            }
-            next[phoneKey].push(mappedRecord)
-            return next
-          })
-        }
-      }
-    } catch (err) {
-      console.log('保存复制记录失败:', err)
+    if (isLoggedIn) {
+      await createCheckRecord(shop, 'copy')
     }
   }
 
