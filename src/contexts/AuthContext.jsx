@@ -21,7 +21,7 @@ export function AuthProvider({ children }) {
 
   async function fetchUserInfo() {
     try {
-      const response = await fetch('/api/collections/users/records', {
+      const response = await fetch('/api/collections/users/auth-refresh', {
         headers: {
           'Authorization': `Bearer ${authToken}`
         }
@@ -30,10 +30,8 @@ export function AuthProvider({ children }) {
         throw new Error('Token invalid')
       }
       const data = await response.json()
-      if (data.items.length > 0) {
-        setCurrentUser(data.items[0])
-        setIsLoggedIn(true)
-      }
+      setCurrentUser(data.record)
+      setIsLoggedIn(true)
     } catch (err) {
       console.log('获取用户信息失败:', err)
       setIsLoggedIn(false)
