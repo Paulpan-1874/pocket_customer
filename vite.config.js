@@ -4,8 +4,6 @@ import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import babel from '@rolldown/plugin-babel'
 import tailwindcss from '@tailwindcss/vite'
 
-const timestamp = Date.now()
-
 export default defineConfig({
   plugins: [
     react(),
@@ -17,15 +15,6 @@ export default defineConfig({
       '/api': {
         target: 'http://127.0.0.1:8090',
         changeOrigin: true
-      }
-    }
-  },
-  build: {
-    rollupOptions: {
-      output: {
-        entryFileNames: `assets/[name].${timestamp}.js`,
-        chunkFileNames: `assets/[name].${timestamp}.js`,
-        assetFileNames: `assets/[name].${timestamp}.[ext]`
       }
     }
   },
