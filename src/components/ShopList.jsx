@@ -38,6 +38,7 @@ function ShopList() {
   const [tagFilter, setTagFilter] = useState('')
   const [phoneInput, setPhoneInput] = useState('')
   const [phoneFilter, setPhoneFilter] = useState('')
+  const userMapRef = useRef({}) // 缓存 user ID -> 用户名 的映射
 
   useEffect(() => {
     fetchShops()
@@ -49,6 +50,45 @@ function ShopList() {
       fetchCheckRecords()
     }
   }, [isLoggedIn])
+
+  // 根据 user ID 批量查询用户名
+  async function fetchUserNames(userIds) {
+    if (!userIds || userIds.length === 0 || !authToken) return {}
+    
+    const unknownIds = userIds.filter(id => !userMapRef.current[id])
+    if (unknownIds.length === 0) return userMapRef.current
+    
+    try {
+      const filter = unknownIds.map(id => 'id="' + id + '"').join(' || ')
+      const response = await fetch('/api/collections/users/records?filter=' + encodeURIComponent(filter) + '&perPage=100', {
+        headers: { 'Authorization': 'Bearer ' + authToken }
+      })
+      if (response.ok) {
+        const data = await response.json()
+        data.items.forEach(user => {
+          userMapRef.current[user.id] = user.name || user.username || user.email
+        })
+      }
+    } catch (err) {
+      console.log('获取用户信息失败:', err)
+    }
+    return userMapRef.current
+  }
+
+  // 解析操作者名字
+  function resolveOperatorName(record, userMap) {
+    // 先尝试从 expand 获取
+    const relationData = record.expand?.relation
+    if (relationData) {
+      return relationData.name || relationData.username || relationData.email
+    }
+    // 再检查是否是当前用户
+    if (currentUser && record.relation === currentUser.id) {
+      return currentUser.name || currentUser.username || currentUser.email
+    }
+    // 最后从缓存查找
+    return userMap[record.relation] || record.relation
+  }
 
   async function fetchShops({ tag: tagFilterParam, phone: phoneFilterParam } = {}) {
     try {
@@ -100,33 +140,46 @@ function ShopList() {
     try {
       const headers = {}
       if (authToken) {
-        headers['Authorization'] = `Bearer ${authToken}`
+        headers['Authorization'] = 'Bearer ' + authToken
       }
       
+      const allRecords = []
       const recordsByPhone = {}
       let page = 1, totalPages = 1
       
       while (page <= totalPages) {
-        const response = await fetch(`/api/collections/check_records/records?page=${page}&perPage=200&expand=relation`, { headers })
+        const response = await fetch('/api/collections/check_records/records?page=' + page + '&perPage=200&expand=relation', { headers })
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`)
+          throw new Error('HTTP ' + response.status)
         }
         
         const data = await response.json()
         totalPages = data.totalPages || 1
-        
-        data.items.forEach(record => {
-          const mappedRecord = mapCheckRecord(record, currentUser)
-          const p = normalizePhone(mappedRecord.store_phone)
-          if (!p) return
-          if (!recordsByPhone[p]) {
-            recordsByPhone[p] = []
-          }
-          recordsByPhone[p].push(mappedRecord)
-        })
-        
+        allRecords.push(...data.items)
         page++
       }
+      
+      // 收集所有未知的 user ID 并批量查询
+      const userIds = [...new Set(allRecords.map(r => r.relation).filter(Boolean))]
+      await fetchUserNames(userIds)
+      
+      // 映射记录
+      allRecords.forEach(record => {
+        const mappedRecord = {
+          id: record.id,
+          store_phone: record.store_phone || '',
+          store_name: record.store_name || '',
+          check_type: record.select,
+          operator: resolveOperatorName(record, userMapRef.current),
+          check_time: record.created
+        }
+        const p = normalizePhone(mappedRecord.store_phone)
+        if (!p) return
+        if (!recordsByPhone[p]) {
+          recordsByPhone[p] = []
+        }
+        recordsByPhone[p].push(mappedRecord)
+      })
       
       setCheckRecords(recordsByPhone)
     } catch (err) {
@@ -147,35 +200,48 @@ function ShopList() {
         return
       }
       
-      const filter = phoneNumbers.map(p => `store_phone="${p}"`).join(' || ')
+      const filter = phoneNumbers.map(p => 'store_phone="' + p + '"').join(' || ')
+      const allRecords = []
       const recordsByPhone = {}
       let page = 1, totalPages = 1
       
       while (page <= totalPages) {
         const response = await fetch(
-          `/api/collections/check_records/records?filter=${encodeURIComponent(filter)}&expand=relation&page=${page}&perPage=200`,
-          { headers: { 'Authorization': `Bearer ${authToken}` } }
+          '/api/collections/check_records/records?filter=' + encodeURIComponent(filter) + '&expand=relation&page=' + page + '&perPage=200',
+          { headers: { 'Authorization': 'Bearer ' + authToken } }
         )
         
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`)
+          throw new Error('HTTP ' + response.status)
         }
         
         const data = await response.json()
         totalPages = data.totalPages || 1
-        
-        data.items.forEach(record => {
-          const mappedRecord = mapCheckRecord(record, currentUser)
-          const p = normalizePhone(mappedRecord.store_phone)
-          if (!p) return
-          if (!recordsByPhone[p]) {
-            recordsByPhone[p] = []
-          }
-          recordsByPhone[p].push(mappedRecord)
-        })
-        
+        allRecords.push(...data.items)
         page++
       }
+      
+      // 收集所有未知的 user ID 并批量查询
+      const userIds = [...new Set(allRecords.map(r => r.relation).filter(Boolean))]
+      await fetchUserNames(userIds)
+      
+      // 映射记录
+      allRecords.forEach(record => {
+        const mappedRecord = {
+          id: record.id,
+          store_phone: record.store_phone || '',
+          store_name: record.store_name || '',
+          check_type: record.select,
+          operator: resolveOperatorName(record, userMapRef.current),
+          check_time: record.created
+        }
+        const p = normalizePhone(mappedRecord.store_phone)
+        if (!p) return
+        if (!recordsByPhone[p]) {
+          recordsByPhone[p] = []
+        }
+        recordsByPhone[p].push(mappedRecord)
+      })
       
       setCheckRecords(recordsByPhone)
     } catch (err) {
