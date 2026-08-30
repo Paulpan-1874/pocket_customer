@@ -1,4 +1,4 @@
-import { createContext, useState, useEffect, useCallback } from 'react'
+import { createContext, useState, useEffect, useCallback, useRef } from 'react'
 
 export const AuthContext = createContext(null)
 
@@ -9,6 +9,7 @@ export function AuthProvider({ children }) {
   const [loginForm, setLoginForm] = useState({ email: '', password: '' })
   const [loginError, setLoginError] = useState('')
   const [loginLoading, setLoginLoading] = useState(false)
+  const tokenVersionRef = useRef(0)
 
   useEffect(() => {
     if (authToken) {
@@ -20,6 +21,7 @@ export function AuthProvider({ children }) {
   }, [authToken])
 
   async function fetchUserInfo() {
+    const currentVersion = tokenVersionRef.current
     try {
       const response = await fetch('/api/collections/users/auth-refresh', {
         headers: {
@@ -30,9 +32,12 @@ export function AuthProvider({ children }) {
         throw new Error('Token invalid')
       }
       const data = await response.json()
+      // 如果在请求期间 token 版本已变化（切换了账号），丢弃本次结果
+      if (tokenVersionRef.current !== currentVersion) return
       setCurrentUser(data.record)
       setIsLoggedIn(true)
     } catch (err) {
+      if (tokenVersionRef.current !== currentVersion) return
       console.log('获取用户信息失败:', err)
       setIsLoggedIn(false)
       setCurrentUser(null)
@@ -68,6 +73,7 @@ export function AuthProvider({ children }) {
       }
 
       const data = await response.json()
+      tokenVersionRef.current++
       setAuthToken(data.token)
       localStorage.setItem('pb_auth_token', data.token)
       setCurrentUser(data.record)
@@ -81,6 +87,7 @@ export function AuthProvider({ children }) {
   }, [loginForm.email, loginForm.password])
 
   const handleLogout = useCallback(() => {
+    tokenVersionRef.current++
     setIsLoggedIn(false)
     setCurrentUser(null)
     setAuthToken('')
